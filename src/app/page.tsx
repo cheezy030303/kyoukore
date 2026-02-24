@@ -125,15 +125,9 @@ export default function Home() {
 
         {/* カテゴリ */}
         <div className="flex justify-between mb-4">
-          <button onClick={() => setCategory("tops")} className="text-sm">
-            トップス
-          </button>
-          <button onClick={() => setCategory("bottoms")} className="text-sm">
-            ボトムス
-          </button>
-          <button onClick={() => setCategory("outers")} className="text-sm">
-            アウター
-          </button>
+        <button onClick={() => setCategory("tops")} className="text-sm">トップス</button>
+<button onClick={() => setCategory("bottoms")} className="text-sm">ボトムス</button>
+<button onClick={() => setCategory("outers")} className="text-sm">アウター</button>
         </div>
 
         {/* 追加 */}
