@@ -8,7 +8,18 @@ type Clothes = {
   outers: string[];
 };
 
+type Outfit = {
+  id: string;
+  mode: "work" | "casual";
+  createdAt: number;
+  tops: string;
+  bottoms: string;
+  outers: string;
+};
+
 const STORAGE_KEY = "clothesData";
+const OUTFITS_KEY = "outfitHistory";
+const MAX_OUTFITS = 20;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -77,6 +88,15 @@ function SectionTab({
   );
 }
 
+function formatDate(ts: number) {
+  const d = new Date(ts);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${mm}/${dd} ${hh}:${mi}`;
+}
+
 export default function Home() {
   const [category, setCategory] = useState<keyof Clothes>("tops");
   const [mode, setMode] = useState<"work" | "casual">("casual");
@@ -93,6 +113,9 @@ export default function Home() {
     outers?: string;
   }>({});
 
+  const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [showHistory, setShowHistory] = useState(true);
+
   const canGenerate = useMemo(
     () => clothes.tops.length > 0 && clothes.bottoms.length > 0 && clothes.outers.length > 0,
     [clothes]
@@ -101,10 +124,17 @@ export default function Home() {
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setClothes(JSON.parse(saved));
+
+    const savedOutfits = localStorage.getItem(OUTFITS_KEY);
+    if (savedOutfits) setOutfits(JSON.parse(savedOutfits));
   }, []);
 
-  const saveToStorage = (data: Clothes) => {
+  const saveClothes = (data: Clothes) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  };
+
+  const saveOutfits = (data: Outfit[]) => {
+    localStorage.setItem(OUTFITS_KEY, JSON.stringify(data));
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,7 +154,7 @@ export default function Home() {
     };
 
     setClothes(updated);
-    saveToStorage(updated);
+    saveClothes(updated);
     e.currentTarget.value = "";
   };
 
@@ -148,19 +178,69 @@ export default function Home() {
   };
 
   const handleDelete = (index: number) => {
+    const removed = clothes[category][index];
+
     const updated = {
       ...clothes,
       [category]: clothes[category].filter((_, i) => i !== index),
     };
-    setClothes(updated);
-    saveToStorage(updated);
 
-    // もし生成結果が「消したアイテム」を参照していたら、結果も消しておく
+    setClothes(updated);
+    saveClothes(updated);
+
+    // 消したアイテムが現在コーデに含まれていたら結果を消す
     setCoordination((prev) => {
       const values = Object.values(prev).filter(Boolean) as string[];
-      if (values.includes(clothes[category][index])) return {};
+      if (values.includes(removed)) return {};
       return prev;
     });
+
+    // 履歴内に消した画像が使われていたら削除（安全）
+    setOutfits((prev) => {
+      const filtered = prev.filter(
+        (o) => o.tops !== removed && o.bottoms !== removed && o.outers !== removed
+      );
+      if (filtered.length !== prev.length) saveOutfits(filtered);
+      return filtered;
+    });
+  };
+
+  const saveCurrentOutfit = () => {
+    if (!coordination.tops || !coordination.bottoms || !coordination.outers) {
+      alert("先にコーデを生成してね！");
+      return;
+    }
+
+    const newOutfit: Outfit = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      mode,
+      createdAt: Date.now(),
+      tops: coordination.tops,
+      bottoms: coordination.bottoms,
+      outers: coordination.outers,
+    };
+
+    const next = [newOutfit, ...outfits].slice(0, MAX_OUTFITS);
+    setOutfits(next);
+    saveOutfits(next);
+  };
+
+  const loadOutfit = (o: Outfit) => {
+    setMode(o.mode);
+    setCoordination({ tops: o.tops, bottoms: o.bottoms, outers: o.outers });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const deleteOutfit = (id: string) => {
+    const next = outfits.filter((o) => o.id !== id);
+    setOutfits(next);
+    saveOutfits(next);
+  };
+
+  const clearOutfits = () => {
+    if (!confirm("履歴をすべて削除しますか？")) return;
+    setOutfits([]);
+    localStorage.removeItem(OUTFITS_KEY);
   };
 
   return (
@@ -269,41 +349,117 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ✅ Result: 1コーデ1カード */}
+        {/* ✅ Result: 1画面コーデっぽいカード */}
         {coordination.tops && (
           <div className="mt-4 rounded-3xl bg-white/80 shadow-sm border border-black/5 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold">
-                {mode === "work" ? "仕事コーデ 👔" : "普段コーデ 👕"}
-              </h2>
-              <span className="text-xs text-gray-500">1セット</span>
-            </div>
-
-            <div className="mt-3 space-y-3">
-              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 text-xs text-gray-500">トップス</div>
-                <img src={coordination.tops} className="w-full h-48 object-cover" />
-              </div>
-
-              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 text-xs text-gray-500">ボトムス</div>
-                <img src={coordination.bottoms} className="w-full h-48 object-cover" />
-              </div>
-
-              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 text-xs text-gray-500">アウター</div>
-                <img src={coordination.outers} className="w-full h-48 object-cover" />
+              <h2 className="font-bold">{mode === "work" ? "仕事コーデ 👔" : "普段コーデ 👕"}</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveCurrentOutfit}
+                  className="rounded-full bg-black text-white px-3 py-1 text-xs font-semibold shadow active:scale-[0.99] transition"
+                >
+                  保存
+                </button>
+                <button
+                  onClick={generateCoordination}
+                  className="rounded-full bg-white border border-black/10 px-3 py-1 text-xs font-semibold shadow-sm active:scale-[0.99] transition"
+                >
+                  もう一回
+                </button>
               </div>
             </div>
 
-            <button
-              onClick={generateCoordination}
-              className="mt-4 w-full rounded-2xl bg-black text-white py-3 font-semibold shadow active:scale-[0.99] transition"
-            >
-              もう一回つくる
-            </button>
+            {/* 1コーデっぽく「枠の中で配置」 */}
+            <div className="mt-3 relative w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden">
+              {/* アウターをうっすら背景気味 */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-90">
+                <img src={coordination.outers} className="w-[90%] rounded-2xl shadow object-cover" />
+              </div>
+
+              {/* トップス（上） */}
+              <div className="absolute left-1/2 top-4 -translate-x-1/2 w-[80%]">
+                <div className="text-[10px] text-gray-500 mb-1 text-center">トップス</div>
+                <img src={coordination.tops} className="w-full rounded-2xl shadow object-cover" />
+              </div>
+
+              {/* ボトムス（下） */}
+              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-[80%]">
+                <div className="text-[10px] text-gray-500 mb-1 text-center">ボトムス</div>
+                <img src={coordination.bottoms} className="w-full rounded-2xl shadow object-cover" />
+              </div>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-500">
+              ※今は「配置」で1コーデ感を出しています（切り抜き無しでもOK）
+            </div>
           </div>
         )}
+
+        {/* ✅ 履歴 */}
+        <div className="mt-4 rounded-3xl bg-white/70 backdrop-blur border border-black/5 shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold">履歴</h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowHistory((v) => !v)}
+                className="rounded-full bg-white border border-black/10 px-3 py-1 text-xs font-semibold shadow-sm"
+              >
+                {showHistory ? "閉じる" : "開く"}
+              </button>
+              <button
+                onClick={clearOutfits}
+                className="rounded-full bg-white border border-black/10 px-3 py-1 text-xs font-semibold shadow-sm"
+              >
+                全消し
+              </button>
+            </div>
+          </div>
+
+          {showHistory && (
+            <div className="mt-3 space-y-3">
+              {outfits.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-black/10 bg-white/60 p-6 text-center">
+                  <div className="text-sm font-semibold">まだ履歴がないよ</div>
+                  <div className="text-xs text-gray-500 mt-1">コーデ生成 →「保存」で残せます</div>
+                </div>
+              ) : (
+                outfits.map((o) => (
+                  <div
+                    key={o.id}
+                    className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden"
+                  >
+                    <div className="px-3 py-2 flex items-center justify-between">
+                      <div className="text-xs text-gray-500">
+                        {o.mode === "work" ? "仕事" : "普段"} ・ {formatDate(o.createdAt)}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => loadOutfit(o)}
+                          className="text-xs font-semibold px-3 py-1 rounded-full bg-black text-white shadow"
+                        >
+                          表示
+                        </button>
+                        <button
+                          onClick={() => deleteOutfit(o.id)}
+                          className="text-xs font-semibold px-3 py-1 rounded-full bg-white border border-black/10 shadow-sm"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1 p-2 bg-gray-50">
+                      <img src={o.tops} className="w-full h-24 object-cover rounded-xl" />
+                      <img src={o.bottoms} className="w-full h-24 object-cover rounded-xl" />
+                      <img src={o.outers} className="w-full h-24 object-cover rounded-xl" />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="mt-6 text-center text-xs text-gray-500">
           © {new Date().getFullYear()} kyoukore
