@@ -107,6 +107,26 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   a.remove();
 }
 
+async function waitForImages(root: HTMLElement) {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) return resolve();
+          img.onload = () => resolve();
+          img.onerror = () => resolve(); // エラーでも止めない
+        })
+    )
+  );
+  // フォントも待つ（iPhone対策）
+  // @ts-ignore
+  if (document.fonts?.ready) {
+    // @ts-ignore
+    await document.fonts.ready;
+  }
+}
+
 export default function Home() {
   const [category, setCategory] = useState<keyof Clothes>("tops");
   const [mode, setMode] = useState<"work" | "casual">("casual");
@@ -254,7 +274,7 @@ export default function Home() {
     localStorage.removeItem(OUTFITS_KEY);
   };
 
-  // ✅ 画像として保存/共有
+  // ✅ 画像として保存/共有（白対策：画像/フォント待ち＋背景色）
   const exportOutfitImage = async () => {
     if (!coordination.tops || !coordination.bottoms || !coordination.outers) {
       alert("先にコーデを生成してね！");
@@ -268,15 +288,18 @@ export default function Home() {
     try {
       setIsExporting(true);
 
+      // 画像とフォントが読み込み完了するまで待つ（超重要）
+      await waitForImages(outfitRef.current);
+
       const dataUrl = await toPng(outfitRef.current, {
         cacheBust: true,
         pixelRatio: 2,
-        // ボタンなどを画像に入れたくない場合は、export中だけ非表示にしている
+        backgroundColor: "#ffffff", // 白固定（透過→白の事故防止）
       });
 
       const filename = `kyoukore_${mode}_${Date.now()}.png`;
 
-      // 共有（iPhone/Androidの一部ブラウザ対応）
+      // 共有（対応端末のみ）
       const canShare =
         typeof navigator !== "undefined" &&
         // @ts-ignore
@@ -417,7 +440,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ✅ Result: 画像保存できる「1画面コーデ」 */}
+        {/* ✅ Result: 1枚画像にした時に絶対全部見える「コラージュ」 */}
         {coordination.tops && (
           <div className="mt-4 rounded-3xl bg-white/80 shadow-sm border border-black/5 p-4">
             <div className="flex items-center justify-between">
@@ -438,49 +461,51 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 画像化する範囲 */}
+            {/* 画像化する範囲（ここをキャプチャする） */}
             <div
               ref={outfitRef}
-              className="mt-3 rounded-3xl bg-gradient-to-b from-white to-gray-50 border border-black/5 overflow-hidden p-3"
+              className="mt-3 rounded-3xl bg-white border border-black/5 overflow-hidden p-3"
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs text-gray-500">今日これ</div>
                 <div className="text-xs text-gray-500">{mode === "work" ? "仕事" : "普段"}</div>
               </div>
 
-              <div className="relative w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden">
-                {/* アウターを背景気味 */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-90">
-                  <img src={coordination.outers} className="w-[90%] rounded-2xl shadow object-cover" />
+              {/* コラージュ：トップス大＋ボトムス大、アウターは右上の小窓 */}
+              <div className="relative w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden p-3">
+                <div className="grid grid-rows-2 gap-3 h-full">
+                  <div className="rounded-2xl bg-white border border-black/5 overflow-hidden shadow-sm">
+                    <div className="px-3 py-2 text-[10px] text-gray-500">トップス</div>
+                    <img src={coordination.tops} className="w-full h-[calc(100%-28px)] object-cover" />
+                  </div>
+
+                  <div className="rounded-2xl bg-white border border-black/5 overflow-hidden shadow-sm">
+                    <div className="px-3 py-2 text-[10px] text-gray-500">ボトムス</div>
+                    <img
+                      src={coordination.bottoms}
+                      className="w-full h-[calc(100%-28px)] object-cover"
+                    />
+                  </div>
                 </div>
 
-                {/* トップス（上） */}
-                <div className="absolute left-1/2 top-4 -translate-x-1/2 w-[80%]">
-                  <div className="text-[10px] text-gray-500 mb-1 text-center">トップス</div>
-                  <img src={coordination.tops} className="w-full rounded-2xl shadow object-cover" />
-                </div>
-
-                {/* ボトムス（下） */}
-                <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-[80%]">
-                  <div className="text-[10px] text-gray-500 mb-1 text-center">ボトムス</div>
-                  <img src={coordination.bottoms} className="w-full rounded-2xl shadow object-cover" />
+                <div className="absolute top-4 right-4 w-[42%] rounded-2xl bg-white border border-black/5 overflow-hidden shadow-lg">
+                  <div className="px-3 py-2 text-[10px] text-gray-500">アウター</div>
+                  <img
+                    src={coordination.outers}
+                    className="w-full h-[140px] object-cover"
+                  />
                 </div>
               </div>
 
-              <div className="mt-2 text-[10px] text-gray-400 text-center">
-                © kyoukore
-              </div>
+              <div className="mt-2 text-[10px] text-gray-400 text-center">© kyoukore</div>
             </div>
 
-            {/* 画像保存ボタン */}
             <button
               onClick={exportOutfitImage}
               disabled={isExporting}
               className={[
                 "mt-4 w-full rounded-2xl py-3 font-semibold shadow transition",
-                isExporting
-                  ? "bg-gray-200 text-gray-500"
-                  : "bg-black text-white active:scale-[0.99]",
+                isExporting ? "bg-gray-200 text-gray-500" : "bg-black text-white active:scale-[0.99]",
               ].join(" ")}
             >
               {isExporting ? "画像を作成中…" : "画像として保存 / 共有"}
@@ -553,9 +578,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="mt-6 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} kyoukore
-        </div>
+        <div className="mt-6 text-center text-xs text-gray-500">© {new Date().getFullYear()} kyoukore</div>
       </div>
     </main>
   );
