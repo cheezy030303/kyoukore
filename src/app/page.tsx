@@ -62,17 +62,17 @@ function SectionTab({
     <button
       onClick={onClick}
       className={[
-        "flex-1 rounded-2xl px-3 py-3 text-left transition",
+        "flex-1 min-w-0 rounded-2xl px-3 py-3 text-left transition",
         active
           ? "bg-white shadow-sm border border-black/5"
-          : "bg-white/60 border border-black/0 hover:bg-white/80",
+          : "bg-white/60 hover:bg-white/80",
       ].join(" ")}
     >
       <div className="text-xs text-gray-500">カテゴリー</div>
       <div className="mt-1 flex items-center justify-between">
-      <div className="font-semibold whitespace-nowrap text-sm">
-  {label}
-</div>
+        <div className="font-semibold whitespace-nowrap text-sm">
+          {label}
+        </div>
         <div className="text-xs text-gray-500">{count}/5</div>
       </div>
     </button>
@@ -89,14 +89,13 @@ export default function Home() {
     outers: [],
   });
 
-  const [coordination, setCoordination] = useState<{
-    tops?: string;
-    bottoms?: string;
-    outers?: string;
-  }>({});
+  const [coordination, setCoordination] = useState<any>({});
 
   const canGenerate = useMemo(
-    () => clothes.tops.length > 0 && clothes.bottoms.length > 0 && clothes.outers.length > 0,
+    () =>
+      clothes.tops.length > 0 &&
+      clothes.bottoms.length > 0 &&
+      clothes.outers.length > 0,
     [clothes]
   );
 
@@ -127,13 +126,12 @@ export default function Home() {
 
     setClothes(updated);
     saveToStorage(updated);
-
     e.currentTarget.value = "";
   };
 
   const generateCoordination = () => {
     if (!canGenerate) {
-      alert("トップス・ボトムス・アウターを1つ以上登録してね！");
+      alert("全部のカテゴリを1つ以上登録してね！");
       return;
     }
 
@@ -150,29 +148,22 @@ export default function Home() {
     setCoordination({});
   };
 
-  const title = "今日これ";
-  const subtitle = "迷わない朝をつくる";
+  const handleDelete = (index: number) => {
+    const updated = {
+      ...clothes,
+      [category]: clothes[category].filter((_, i) => i !== index),
+    };
+    setClothes(updated);
+    saveToStorage(updated);
+  };
 
   return (
     <main className="min-h-screen flex justify-center bg-gradient-to-b from-[#F7F2FF] via-[#F3FAFF] to-white">
       <div className="w-[390px] min-h-screen px-4 py-6">
-        {/* Header */}
-        <div className="mb-4">
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-              <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-            </div>
-            <div className="rounded-2xl bg-white/70 border border-black/5 px-3 py-2 text-xs text-gray-600 shadow-sm">
-              ver: free
-            </div>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold text-center mb-4">今日これ</h1>
 
-        {/* Card */}
-        <div className="rounded-3xl bg-white/70 backdrop-blur border border-black/5 shadow-sm p-4">
-          {/* Mode */}
-          <div className="flex gap-2 justify-center">
+        <div className="rounded-3xl bg-white/80 shadow p-4">
+          <div className="flex gap-2 justify-center mb-4">
             <Pill active={mode === "work"} onClick={() => setMode("work")}>
               仕事着
             </Pill>
@@ -181,8 +172,7 @@ export default function Home() {
             </Pill>
           </div>
 
-          {/* Category tabs */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <SectionTab
               active={category === "tops"}
               onClick={() => setCategory("tops")}
@@ -203,90 +193,42 @@ export default function Home() {
             />
           </div>
 
-          {/* Upload */}
-          <div className="mt-4">
-            <label className="block rounded-2xl bg-black text-white text-center py-3 font-semibold shadow cursor-pointer active:scale-[0.99] transition">
-              ＋ 追加する
-              <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-            </label>
-            <p className="text-xs text-gray-500 mt-2">
-              {category === "tops" && "トップスを最大5枚まで登録できます"}
-              {category === "bottoms" && "ボトムスを最大5枚まで登録できます"}
-              {category === "outers" && "アウターを最大5枚まで登録できます"}
-            </p>
-          </div>
+          <label className="block mt-4 bg-black text-white text-center py-3 rounded-2xl cursor-pointer">
+            ＋ 追加する
+            <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+          </label>
 
-          {/* Grid */}
           <div className="mt-4 grid grid-cols-2 gap-3">
             {clothes[category].map((item, index) => (
               <div
                 key={index}
-                className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden"
+                className="relative rounded-2xl overflow-hidden shadow"
               >
+                <button
+                  onClick={() => handleDelete(index)}
+                  className="absolute top-2 right-2 w-7 h-7 bg-black/70 text-white rounded-full text-xs flex items-center justify-center"
+                >
+                  ×
+                </button>
                 <img src={item} className="w-full h-44 object-cover" />
               </div>
             ))}
-            {clothes[category].length === 0 && (
-              <div className="col-span-2 rounded-2xl border border-dashed border-black/10 bg-white/60 p-6 text-center">
-                <div className="text-sm font-semibold">まだ何もないよ</div>
-                <div className="text-xs text-gray-500 mt-1">上の「＋追加する」から登録してね</div>
-              </div>
-            )}
           </div>
 
-          {/* Actions */}
-          <div className="mt-5 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               onClick={generateCoordination}
-              className="rounded-2xl bg-[#3B82F6] text-white py-3 font-semibold shadow active:scale-[0.99] transition"
+              className="bg-blue-500 text-white py-3 rounded-2xl"
             >
               コーデ生成
             </button>
             <button
               onClick={handleReset}
-              className="rounded-2xl bg-[#EF4444] text-white py-3 font-semibold shadow active:scale-[0.99] transition"
+              className="bg-red-500 text-white py-3 rounded-2xl"
             >
               リセット
             </button>
           </div>
-        </div>
-
-        {/* Result */}
-        {coordination.tops && (
-          <div className="mt-4 rounded-3xl bg-white/70 backdrop-blur border border-black/5 shadow-sm p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold">
-                {mode === "work" ? "仕事コーデ 👔" : "普段コーデ 👕"}
-              </h2>
-              <span className="text-xs text-gray-500">提案 1セット</span>
-            </div>
-
-            <div className="mt-3 space-y-3">
-              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 text-xs text-gray-500">トップス</div>
-                <img src={coordination.tops} className="w-full h-48 object-cover" />
-              </div>
-              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 text-xs text-gray-500">ボトムス</div>
-                <img src={coordination.bottoms} className="w-full h-48 object-cover" />
-              </div>
-              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
-                <div className="px-3 py-2 text-xs text-gray-500">アウター</div>
-                <img src={coordination.outers} className="w-full h-48 object-cover" />
-              </div>
-            </div>
-
-            <button
-              onClick={generateCoordination}
-              className="mt-4 w-full rounded-2xl bg-black text-white py-3 font-semibold shadow active:scale-[0.99] transition"
-            >
-              もう一回つくる
-            </button>
-          </div>
-        )}
-
-        <div className="mt-6 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} kyoukore
         </div>
       </div>
     </main>
