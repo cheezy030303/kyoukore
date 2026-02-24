@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toPng } from "html-to-image";
 
 type Clothes = {
   tops: string[];
@@ -97,6 +98,15 @@ function formatDate(ts: number) {
   return `${mm}/${dd} ${hh}:${mi}`;
 }
 
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export default function Home() {
   const [category, setCategory] = useState<keyof Clothes>("tops");
   const [mode, setMode] = useState<"work" | "casual">("casual");
@@ -115,6 +125,9 @@ export default function Home() {
 
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [showHistory, setShowHistory] = useState(true);
+
+  const outfitRef = useRef<HTMLDivElement | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const canGenerate = useMemo(
     () => clothes.tops.length > 0 && clothes.bottoms.length > 0 && clothes.outers.length > 0,
@@ -188,14 +201,12 @@ export default function Home() {
     setClothes(updated);
     saveClothes(updated);
 
-    // 消したアイテムが現在コーデに含まれていたら結果を消す
     setCoordination((prev) => {
       const values = Object.values(prev).filter(Boolean) as string[];
       if (values.includes(removed)) return {};
       return prev;
     });
 
-    // 履歴内に消した画像が使われていたら削除（安全）
     setOutfits((prev) => {
       const filtered = prev.filter(
         (o) => o.tops !== removed && o.bottoms !== removed && o.outers !== removed
@@ -241,6 +252,63 @@ export default function Home() {
     if (!confirm("履歴をすべて削除しますか？")) return;
     setOutfits([]);
     localStorage.removeItem(OUTFITS_KEY);
+  };
+
+  // ✅ 画像として保存/共有
+  const exportOutfitImage = async () => {
+    if (!coordination.tops || !coordination.bottoms || !coordination.outers) {
+      alert("先にコーデを生成してね！");
+      return;
+    }
+    if (!outfitRef.current) {
+      alert("画像化する要素が見つからないよ（再読み込みしてね）");
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+
+      const dataUrl = await toPng(outfitRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        // ボタンなどを画像に入れたくない場合は、export中だけ非表示にしている
+      });
+
+      const filename = `kyoukore_${mode}_${Date.now()}.png`;
+
+      // 共有（iPhone/Androidの一部ブラウザ対応）
+      const canShare =
+        typeof navigator !== "undefined" &&
+        // @ts-ignore
+        typeof navigator.share === "function" &&
+        // @ts-ignore
+        typeof navigator.canShare === "function";
+
+      if (canShare) {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], filename, { type: "image/png" });
+
+        // @ts-ignore
+        if (navigator.canShare({ files: [file] })) {
+          // @ts-ignore
+          await navigator.share({
+            title: "今日これ",
+            text: "今日のコーデ",
+            files: [file],
+          });
+          return;
+        }
+      }
+
+      // 共有できない場合はダウンロード
+      downloadDataUrl(dataUrl, filename);
+    } catch (e) {
+      console.error(e);
+      alert("画像の保存に失敗しました（もう一度試してね）");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -349,7 +417,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ✅ Result: 1画面コーデっぽいカード */}
+        {/* ✅ Result: 画像保存できる「1画面コーデ」 */}
         {coordination.tops && (
           <div className="mt-4 rounded-3xl bg-white/80 shadow-sm border border-black/5 p-4">
             <div className="flex items-center justify-between">
@@ -370,29 +438,53 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 1コーデっぽく「枠の中で配置」 */}
-            <div className="mt-3 relative w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden">
-              {/* アウターをうっすら背景気味 */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-90">
-                <img src={coordination.outers} className="w-[90%] rounded-2xl shadow object-cover" />
+            {/* 画像化する範囲 */}
+            <div
+              ref={outfitRef}
+              className="mt-3 rounded-3xl bg-gradient-to-b from-white to-gray-50 border border-black/5 overflow-hidden p-3"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-gray-500">今日これ</div>
+                <div className="text-xs text-gray-500">{mode === "work" ? "仕事" : "普段"}</div>
               </div>
 
-              {/* トップス（上） */}
-              <div className="absolute left-1/2 top-4 -translate-x-1/2 w-[80%]">
-                <div className="text-[10px] text-gray-500 mb-1 text-center">トップス</div>
-                <img src={coordination.tops} className="w-full rounded-2xl shadow object-cover" />
+              <div className="relative w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden">
+                {/* アウターを背景気味 */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-90">
+                  <img src={coordination.outers} className="w-[90%] rounded-2xl shadow object-cover" />
+                </div>
+
+                {/* トップス（上） */}
+                <div className="absolute left-1/2 top-4 -translate-x-1/2 w-[80%]">
+                  <div className="text-[10px] text-gray-500 mb-1 text-center">トップス</div>
+                  <img src={coordination.tops} className="w-full rounded-2xl shadow object-cover" />
+                </div>
+
+                {/* ボトムス（下） */}
+                <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-[80%]">
+                  <div className="text-[10px] text-gray-500 mb-1 text-center">ボトムス</div>
+                  <img src={coordination.bottoms} className="w-full rounded-2xl shadow object-cover" />
+                </div>
               </div>
 
-              {/* ボトムス（下） */}
-              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-[80%]">
-                <div className="text-[10px] text-gray-500 mb-1 text-center">ボトムス</div>
-                <img src={coordination.bottoms} className="w-full rounded-2xl shadow object-cover" />
+              <div className="mt-2 text-[10px] text-gray-400 text-center">
+                © kyoukore
               </div>
             </div>
 
-            <div className="mt-3 text-xs text-gray-500">
-              ※今は「配置」で1コーデ感を出しています（切り抜き無しでもOK）
-            </div>
+            {/* 画像保存ボタン */}
+            <button
+              onClick={exportOutfitImage}
+              disabled={isExporting}
+              className={[
+                "mt-4 w-full rounded-2xl py-3 font-semibold shadow transition",
+                isExporting
+                  ? "bg-gray-200 text-gray-500"
+                  : "bg-black text-white active:scale-[0.99]",
+              ].join(" ")}
+            >
+              {isExporting ? "画像を作成中…" : "画像として保存 / 共有"}
+            </button>
           </div>
         )}
 
