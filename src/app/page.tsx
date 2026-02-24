@@ -23,6 +23,60 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "px-4 py-2 rounded-full text-sm font-medium transition",
+        active
+          ? "bg-black text-white shadow"
+          : "bg-white/70 text-gray-800 border border-black/5 hover:bg-white",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionTab({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "flex-1 rounded-2xl px-3 py-3 text-left transition",
+        active
+          ? "bg-white shadow-sm border border-black/5"
+          : "bg-white/60 border border-black/0 hover:bg-white/80",
+      ].join(" ")}
+    >
+      <div className="text-xs text-gray-500">カテゴリー</div>
+      <div className="mt-1 flex items-center justify-between">
+        <div className="font-semibold">{label}</div>
+        <div className="text-xs text-gray-500">{count}/5</div>
+      </div>
+    </button>
+  );
+}
+
 export default function Home() {
   const [category, setCategory] = useState<keyof Clothes>("tops");
   const [mode, setMode] = useState<"work" | "casual">("casual");
@@ -44,7 +98,6 @@ export default function Home() {
     [clothes]
   );
 
-  // 初期読み込み
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setClothes(JSON.parse(saved));
@@ -54,7 +107,6 @@ export default function Home() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   };
 
-  // 画像追加（base64で保存→壊れない）
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -77,14 +129,12 @@ export default function Home() {
     e.currentTarget.value = "";
   };
 
-  // ✅ ランダムコーデ生成（課金なし）
   const generateCoordination = () => {
     if (!canGenerate) {
-      alert("全部のカテゴリに1つ以上登録してください！");
+      alert("トップス・ボトムス・アウターを1つ以上登録してね！");
       return;
     }
 
-    // ※今はモードで表示名だけ変える（ロジック差は次に追加できる）
     setCoordination({
       tops: pickRandom(clothes.tops),
       bottoms: pickRandom(clothes.bottoms),
@@ -98,76 +148,144 @@ export default function Home() {
     setCoordination({});
   };
 
+  const title = "今日これ";
+  const subtitle = "迷わない朝をつくる";
+
   return (
-    <main className="min-h-screen flex justify-center bg-gray-100">
-      <div className="w-[375px] min-h-screen bg-white shadow-xl p-6">
-        <h1 className="text-xl font-bold mb-4 text-center">今日これ 👕</h1>
-
-        {/* モード */}
-        <div className="flex justify-center gap-4 mb-4">
-          <button
-            onClick={() => setMode("work")}
-            className={`px-3 py-1 rounded ${
-              mode === "work" ? "bg-black text-white" : "bg-gray-200"
-            }`}
-          >
-            仕事着
-          </button>
-          <button
-            onClick={() => setMode("casual")}
-            className={`px-3 py-1 rounded ${
-              mode === "casual" ? "bg-black text-white" : "bg-gray-200"
-            }`}
-          >
-            普段着
-          </button>
+    <main className="min-h-screen flex justify-center bg-gradient-to-b from-[#F7F2FF] via-[#F3FAFF] to-white">
+      <div className="w-[390px] min-h-screen px-4 py-6">
+        {/* Header */}
+        <div className="mb-4">
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+              <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+            </div>
+            <div className="rounded-2xl bg-white/70 border border-black/5 px-3 py-2 text-xs text-gray-600 shadow-sm">
+              ver: free
+            </div>
+          </div>
         </div>
 
-        {/* カテゴリ */}
-        <div className="flex justify-between mb-4">
-        <button onClick={() => setCategory("tops")} className="text-sm">トップス</button>
-<button onClick={() => setCategory("bottoms")} className="text-sm">ボトムス</button>
-<button onClick={() => setCategory("outers")} className="text-sm">アウター</button>
+        {/* Card */}
+        <div className="rounded-3xl bg-white/70 backdrop-blur border border-black/5 shadow-sm p-4">
+          {/* Mode */}
+          <div className="flex gap-2 justify-center">
+            <Pill active={mode === "work"} onClick={() => setMode("work")}>
+              仕事着
+            </Pill>
+            <Pill active={mode === "casual"} onClick={() => setMode("casual")}>
+              普段着
+            </Pill>
+          </div>
+
+          {/* Category tabs */}
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <SectionTab
+              active={category === "tops"}
+              onClick={() => setCategory("tops")}
+              label="トップス"
+              count={clothes.tops.length}
+            />
+            <SectionTab
+              active={category === "bottoms"}
+              onClick={() => setCategory("bottoms")}
+              label="ボトムス"
+              count={clothes.bottoms.length}
+            />
+            <SectionTab
+              active={category === "outers"}
+              onClick={() => setCategory("outers")}
+              label="アウター"
+              count={clothes.outers.length}
+            />
+          </div>
+
+          {/* Upload */}
+          <div className="mt-4">
+            <label className="block rounded-2xl bg-black text-white text-center py-3 font-semibold shadow cursor-pointer active:scale-[0.99] transition">
+              ＋ 追加する
+              <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+            </label>
+            <p className="text-xs text-gray-500 mt-2">
+              {category === "tops" && "トップスを最大5枚まで登録できます"}
+              {category === "bottoms" && "ボトムスを最大5枚まで登録できます"}
+              {category === "outers" && "アウターを最大5枚まで登録できます"}
+            </p>
+          </div>
+
+          {/* Grid */}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {clothes[category].map((item, index) => (
+              <div
+                key={index}
+                className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden"
+              >
+                <img src={item} className="w-full h-44 object-cover" />
+              </div>
+            ))}
+            {clothes[category].length === 0 && (
+              <div className="col-span-2 rounded-2xl border border-dashed border-black/10 bg-white/60 p-6 text-center">
+                <div className="text-sm font-semibold">まだ何もないよ</div>
+                <div className="text-xs text-gray-500 mt-1">上の「＋追加する」から登録してね</div>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button
+              onClick={generateCoordination}
+              className="rounded-2xl bg-[#3B82F6] text-white py-3 font-semibold shadow active:scale-[0.99] transition"
+            >
+              コーデ生成
+            </button>
+            <button
+              onClick={handleReset}
+              className="rounded-2xl bg-[#EF4444] text-white py-3 font-semibold shadow active:scale-[0.99] transition"
+            >
+              リセット
+            </button>
+          </div>
         </div>
 
-        {/* 追加 */}
-        <label className="block bg-black text-white text-center py-2 rounded mb-4 cursor-pointer">
-          追加する
-          <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        </label>
-
-        {/* 一覧 */}
-        <div className="grid grid-cols-2 gap-2">
-          {clothes[category].map((item, index) => (
-            <img key={index} src={item} className="w-full rounded shadow" />
-          ))}
-        </div>
-
-        {/* 生成 */}
-        <button
-          onClick={generateCoordination}
-          className="mt-6 w-full bg-blue-500 text-white py-2 rounded"
-        >
-          コーデ生成（無料）
-        </button>
-
-        {/* 結果 */}
+        {/* Result */}
         {coordination.tops && (
-  <div className="mt-6">
-    <h2 className="text-center font-bold mb-2">
-      {mode === "work" ? "仕事コーデ 👔" : "普段コーデ 👕"}
-    </h2>
+          <div className="mt-4 rounded-3xl bg-white/70 backdrop-blur border border-black/5 shadow-sm p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold">
+                {mode === "work" ? "仕事コーデ 👔" : "普段コーデ 👕"}
+              </h2>
+              <span className="text-xs text-gray-500">提案 1セット</span>
+            </div>
 
-    <img src={coordination.tops} className="w-full rounded mb-2" />
-    <img src={coordination.bottoms} className="w-full rounded mb-2" />
-    <img src={coordination.outers} className="w-full rounded" />
-  </div>
-)}
+            <div className="mt-3 space-y-3">
+              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
+                <div className="px-3 py-2 text-xs text-gray-500">トップス</div>
+                <img src={coordination.tops} className="w-full h-48 object-cover" />
+              </div>
+              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
+                <div className="px-3 py-2 text-xs text-gray-500">ボトムス</div>
+                <img src={coordination.bottoms} className="w-full h-48 object-cover" />
+              </div>
+              <div className="rounded-2xl bg-white border border-black/5 shadow-sm overflow-hidden">
+                <div className="px-3 py-2 text-xs text-gray-500">アウター</div>
+                <img src={coordination.outers} className="w-full h-48 object-cover" />
+              </div>
+            </div>
 
-        {/* リセット */}
-        <button onClick={handleReset} className="mt-6 w-full bg-red-500 text-white py-2 rounded">
-          リセット
-        </button>
+            <button
+              onClick={generateCoordination}
+              className="mt-4 w-full rounded-2xl bg-black text-white py-3 font-semibold shadow active:scale-[0.99] transition"
+            >
+              もう一回つくる
+            </button>
+          </div>
+        )}
+
+        <div className="mt-6 text-center text-xs text-gray-500">
+          © {new Date().getFullYear()} kyoukore
+        </div>
       </div>
     </main>
   );
