@@ -70,7 +70,9 @@ function SectionTab({
     >
       <div className="text-xs text-gray-500">カテゴリー</div>
       <div className="mt-1 flex items-center justify-between">
-        <div className="font-semibold">{label}</div>
+      <div className="font-semibold whitespace-nowrap text-sm">
+  {label}
+</div>
         <div className="text-xs text-gray-500">{count}/5</div>
       </div>
     </button>
