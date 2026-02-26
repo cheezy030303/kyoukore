@@ -203,23 +203,25 @@ export default function Home() {
         <button
   onClick={generateCoordination}
   className="
-  w-full
-  py-3
-  rounded-xl
-  font-semibold
-  text-white
-  bg-gradient-to-r
-  from-amber-400
-  via-amber-500
-  to-amber-600
-  shadow-md
-  ring-1 ring-amber-200
-  hover:from-amber-500
-  hover:to-amber-700
-  active:scale-[0.98]
-  transition-all
-  duration-200
-"
+    w-full
+    py-3
+    rounded-xl
+    font-semibold
+    text-slate-900
+    bg-gradient-to-r
+    from-yellow-300
+    via-amber-400
+    to-yellow-600
+    shadow-lg
+    ring-1 ring-yellow-200
+    hover:from-yellow-400
+    hover:to-yellow-700
+    active:scale-[0.98]
+    transition-all
+    duration-200
+    bg-[linear-gradient(135deg,#FDE68A,#FBBF24,#B45309)]
+    tracking-wide
+  "
 >
   コーデ生成
 </button>
