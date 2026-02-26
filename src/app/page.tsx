@@ -24,13 +24,13 @@ type Item = {
 type Clothes = Record<Category, Item[]>;
 
 type WeatherInfo = {
-  city: "Tokyo";
+  city: string;
   temp: number | null;
   feels: number | null;
   code: number | null;
   tmax: number | null;
   tmin: number | null;
-  precip: number | null; // 降水確率(最大)
+  precip: number | null;
   time: string | null;
 };
 
@@ -187,7 +187,7 @@ function weatherLabel(w: WeatherInfo | null): string {
 
   const range = min != null && max != null ? `（${min}〜${max}℃）` : "";
   const rain = p != null ? ` / 降水${p}%` : "";
-  return `東京 ${t}℃ ${range}${rain}`;
+  rreturn `${w.city} ${t}℃ ${range}${rain}`;
 }
 
 export default function Home() {
