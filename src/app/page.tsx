@@ -116,8 +116,37 @@ function tempBonusForOuter(outer: ColorTag, temp: number | null): number {
 
   return 0;
 }
+function rainPenaltyForBottom(
+  bottom: ColorTag,
+  precip: number | null
+): number {
+  if (precip == null) return 0;
+  if (precip < 40) return 0;
 
-function scoreOutfit(t: ColorTag, b: ColorTag, o: ColorTag, mode: Mode, temp: number | null): number {
+  // 雨の日は「白・ベージュ」を少し避ける
+  if (bottom === "white" || bottom === "beige") return -2;
+
+  // 黒・ネイビーは少し安心
+  if (bottom === "black" || bottom === "navy") return 1;
+
+  return 0;
+}
+function scoreOutfit(
+  t: ColorTag,
+  b: ColorTag,
+  o: ColorTag,
+  mode: Mode,
+  temp: number | null,
+  precip: number | null
+): number {
+  return (
+    scorePair(t, b, mode) * 3 +
+    scorePair(o, t, mode) +
+    scorePair(o, b, mode) +
+    tempBonusForOuter(o, temp) +
+    rainPenaltyForBottom(b, precip)
+  );
+}
   return scorePair(t, b, mode) * 3 + scorePair(o, t, mode) + scorePair(o, b, mode) + tempBonusForOuter(o, temp);
 }
 
@@ -301,13 +330,13 @@ export default function Home() {
       return;
     }
 
-    const temp = weather?.temp ?? null;
+    const precip = weather?.precip ?? null;
 
     const scored: { t: Item; b: Item; o: Item; score: number }[] = [];
     for (const t of clothes.tops) {
       for (const b of clothes.bottoms) {
         for (const o of clothes.outers) {
-          scored.push({ t, b, o, score: scoreOutfit(t.color, b.color, o.color, mode, temp) });
+          scored.push({ t, b, o, score: scoreOutfit(t.color, b.color, o.color, mode, temp, precip) });
         }
       }
     }
