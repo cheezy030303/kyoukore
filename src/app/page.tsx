@@ -401,7 +401,7 @@ export default function Home() {
       <div className="w-full max-w-md text-center mb-8">
         <h1 className="text-3xl font-bold text-slate-900 tracking-wide">今日これ</h1>
         <p className="text-sm text-slate-500 mt-1">smart outfit assistant</p>
-        <div className="h-[2px] w-16 bg-amber-500 mx-auto mt-3 rounded-full"></div>
+        <div className="h-[2px] w-16 bg-rose-300mx-auto mt-3 rounded-full"></div>
       </div>
 
       {/* Main Card */}
@@ -434,7 +434,7 @@ export default function Home() {
               onClick={() => setCategory(cat)}
               className={`py-2 rounded-xl border transition ${
                 category === cat
-                  ? "border-amber-500 text-amber-700 bg-amber-50"
+                  ? "border-rose-300 text-rose-500 bg-rose-50"
                   : "border-slate-200 text-slate-600"
               }`}
             >
@@ -496,23 +496,23 @@ export default function Home() {
 
         {/* Buttons */}
         <button
-          onClick={generateCoordination}
-          className="
-            w-full
-            py-3
-            rounded-xl
-            font-semibold
-            text-slate-900
-            tracking-wide
-            bg-[linear-gradient(to_bottom,#FDE68A,#FBBF24,#B45309)]
-            shadow-[0_6px_18px_rgba(180,83,9,0.22)]
-            active:scale-[0.98]
-            transition-all
-            duration-200
-          "
-        >
-          コーデ生成（AI）
-        </button>
+  onClick={generateCoordination}
+  className="
+    w-full
+    py-3
+    rounded-xl
+    font-semibold
+    text-white
+    tracking-wide
+    bg-[linear-gradient(to_bottom,#F9A8D4,#F472B6,#DB2777)]
+    shadow-[0_6px_18px_rgba(219,39,119,0.25)]
+    active:scale-[0.98]
+    transition-all
+    duration-200
+  "
+>
+  コーデ生成（AI）
+</button>
 
         <button
           onClick={handleReset}
