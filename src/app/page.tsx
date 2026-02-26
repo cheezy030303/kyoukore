@@ -291,7 +291,7 @@ export default function Home() {
 
       const canvas = await html2canvas(outfitRef.current, {
         backgroundColor: "#ffffff",
-        scale: 2,
+        scale: 1,
         useCORS: true,
         logging: false,
       });
