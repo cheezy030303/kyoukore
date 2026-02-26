@@ -208,19 +208,14 @@ export default function Home() {
     rounded-xl
     font-semibold
     text-slate-900
-    bg-gradient-to-r
-    from-yellow-300
-    via-amber-400
-    to-yellow-600
+    tracking-wide
+    bg-[linear-gradient(135deg,#FDE68A,#FBBF24,#B45309)]
     shadow-lg
     ring-1 ring-yellow-200
-    hover:from-yellow-400
-    hover:to-yellow-700
     active:scale-[0.98]
     transition-all
     duration-200
-    bg-[linear-gradient(135deg,#FDE68A,#FBBF24,#B45309)]
-    tracking-wide
+    shadow-[0_4px_12px_rgba(180,83,9,0.25)]
   "
 >
   コーデ生成
