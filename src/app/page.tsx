@@ -164,13 +164,42 @@ function scoreOutfit6(
   const weather =
     tempBonusForOuter(o, temp) +
     rainPenaltyForBottom(b, precip) +
-    rainPenaltyForLightItem(s, precip) +
-    rainPenaltyForLightItem(bag, precip);
+    // 雨の日は靴・バッグ淡色を少し避ける（現実寄り）
+    rainPenaltyForLightItem(s, precip) * 2 +
+    rainPenaltyForLightItem(bag, precip) * 2;
 
-  // 仕事は柄×柄をさらに避けたい
-  const workTight = mode === "work" && (acc === "pattern" || bag === "pattern" || s === "pattern") ? -1 : 0;
+  // ========= 垢抜けルール =========
 
-  return base + weather + workTight;
+  // 仕事：靴とバッグを揃えると「きちんと感」
+  const workPolish =
+    mode === "work"
+      ? s === bag
+        ? 3
+        : (s === "black" && bag === "navy") || (s === "navy" && bag === "black")
+        ? 2
+        : 0
+      : 0;
+
+  // 普段：差し色は「どちらか1点」がちょうどいい
+  const isAccent = (c: ColorTag) => c === "color" || c === "pattern";
+  const casualAccent =
+    mode === "casual"
+      ? isAccent(s) && isAccent(bag)
+        ? -2 // 両方アクセントはやりすぎ
+        : isAccent(s) || isAccent(bag)
+        ? 2 // どちらか1点アクセントで垢抜け
+        : 0
+      : 0;
+
+  // 仕事：柄アイテム（靴/バッグ/アクセ）が多いと落ち着きに欠ける
+  const workTight =
+    mode === "work"
+      ? (acc === "pattern" ? -1 : 0) +
+        (bag === "pattern" ? -1 : 0) +
+        (s === "pattern" ? -1 : 0)
+      : 0;
+
+  return base + weather + workPolish + casualAccent + workTight;
 }
 
 /** iPhone向け：Canvasで合成して共有/保存 */
