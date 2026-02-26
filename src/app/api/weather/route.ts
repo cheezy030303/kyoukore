@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   // 東京（だいたい中心）
@@ -14,7 +15,10 @@ export async function GET() {
 
   try {
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`weather fetch failed: ${res.status}`);
+
+    if (!res.ok) {
+      throw new Error(`Weather fetch failed: ${res.status}`);
+    }
 
     const data = await res.json();
 
@@ -26,14 +30,23 @@ export async function GET() {
       temp: current.temperature_2m ?? null,
       feels: current.apparent_temperature ?? null,
       code: current.weather_code ?? null,
-      tmax: Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max[0] : null,
-      tmin: Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min[0] : null,
-      precip: Array.isArray(daily.precipitation_probability_max) ? daily.precipitation_probability_max[0] : null,
+      tmax: Array.isArray(daily.temperature_2m_max)
+        ? daily.temperature_2m_max[0]
+        : null,
+      tmin: Array.isArray(daily.temperature_2m_min)
+        ? daily.temperature_2m_min[0]
+        : null,
+      precip: Array.isArray(daily.precipitation_probability_max)
+        ? daily.precipitation_probability_max[0]
+        : null,
       time: current.time ?? null,
     });
-  } catch (e: any) {
+  } catch (error: any) {
     return Response.json(
-      { error: "weather_error", message: e?.message ?? "unknown" },
+      {
+        error: "weather_error",
+        message: error?.message ?? "unknown error",
+      },
       { status: 500 }
     );
   }
