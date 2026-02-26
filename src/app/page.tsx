@@ -187,7 +187,7 @@ function weatherLabel(w: WeatherInfo | null): string {
 
   const range = min != null && max != null ? `（${min}〜${max}℃）` : "";
   const rain = p != null ? ` / 降水${p}%` : "";
-  rreturn `${w.city} ${t}℃ ${range}${rain}`;
+  return `${w.city} ${t}℃ ${range}${rain}`;
 }
 
 export default function Home() {
