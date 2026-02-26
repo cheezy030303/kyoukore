@@ -504,8 +504,8 @@ export default function Home() {
     font-semibold
     text-white
     tracking-wide
-    bg-[linear-gradient(to_bottom,#F9A8D4,#F472B6,#DB2777)]
-    shadow-[0_6px_18px_rgba(219,39,119,0.25)]
+    bg-[linear-gradient(to_bottom,#E7B5B5,#C08484,#9F6A6A)]
+    shadow-[0_6px_18px_rgba(159,106,106,0.25)]
     active:scale-[0.98]
     transition-all
     duration-200
