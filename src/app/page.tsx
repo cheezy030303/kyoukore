@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toPng } from "html-to-image";
+import html2canvas from "html2canvas";
 
 type Clothes = {
   tops: string[];
@@ -98,15 +98,6 @@ function formatDate(ts: number) {
   return `${mm}/${dd} ${hh}:${mi}`;
 }
 
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 async function waitForImages(root: HTMLElement) {
   const imgs = Array.from(root.querySelectorAll("img"));
   await Promise.all(
@@ -115,16 +106,24 @@ async function waitForImages(root: HTMLElement) {
         new Promise<void>((resolve) => {
           if (img.complete && img.naturalWidth > 0) return resolve();
           img.onload = () => resolve();
-          img.onerror = () => resolve(); // エラーでも止めない
+          img.onerror = () => resolve();
         })
     )
   );
-  // フォントも待つ（iPhone対策）
   // @ts-ignore
   if (document.fonts?.ready) {
     // @ts-ignore
     await document.fonts.ready;
   }
+}
+
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 export default function Home() {
@@ -274,7 +273,7 @@ export default function Home() {
     localStorage.removeItem(OUTFITS_KEY);
   };
 
-  // ✅ 画像として保存/共有（白対策：画像/フォント待ち＋背景色）
+  // ✅ iPhoneで白くなりがちな問題を避ける：html2canvas
   const exportOutfitImage = async () => {
     if (!coordination.tops || !coordination.bottoms || !coordination.outers) {
       alert("先にコーデを生成してね！");
@@ -288,15 +287,16 @@ export default function Home() {
     try {
       setIsExporting(true);
 
-      // 画像とフォントが読み込み完了するまで待つ（超重要）
       await waitForImages(outfitRef.current);
 
-      const dataUrl = await toPng(outfitRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: "#ffffff", // 白固定（透過→白の事故防止）
+      const canvas = await html2canvas(outfitRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
       });
 
+      const dataUrl = canvas.toDataURL("image/png");
       const filename = `kyoukore_${mode}_${Date.now()}.png`;
 
       // 共有（対応端末のみ）
@@ -311,7 +311,6 @@ export default function Home() {
         const res = await fetch(dataUrl);
         const blob = await res.blob();
         const file = new File([blob], filename, { type: "image/png" });
-
         // @ts-ignore
         if (navigator.canShare({ files: [file] })) {
           // @ts-ignore
@@ -324,7 +323,6 @@ export default function Home() {
         }
       }
 
-      // 共有できない場合はダウンロード
       downloadDataUrl(dataUrl, filename);
     } catch (e) {
       console.error(e);
@@ -440,7 +438,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ✅ Result: 1枚画像にした時に絶対全部見える「コラージュ」 */}
+        {/* ✅ 1枚コーデ：崩れない固定コラージュ */}
         {coordination.tops && (
           <div className="mt-4 rounded-3xl bg-white/80 shadow-sm border border-black/5 p-4">
             <div className="flex items-center justify-between">
@@ -461,7 +459,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 画像化する範囲（ここをキャプチャする） */}
+            {/* 画像化する範囲 */}
             <div
               ref={outfitRef}
               className="mt-3 rounded-3xl bg-white border border-black/5 overflow-hidden p-3"
@@ -471,29 +469,24 @@ export default function Home() {
                 <div className="text-xs text-gray-500">{mode === "work" ? "仕事" : "普段"}</div>
               </div>
 
-              {/* コラージュ：トップス大＋ボトムス大、アウターは右上の小窓 */}
-              <div className="relative w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden p-3">
-                <div className="grid grid-rows-2 gap-3 h-full">
+              <div className="w-full aspect-[3/4] rounded-3xl bg-gray-50 border border-black/5 overflow-hidden p-3">
+                {/* 上段：トップス左 / アウター右 */}
+                <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-white border border-black/5 overflow-hidden shadow-sm">
                     <div className="px-3 py-2 text-[10px] text-gray-500">トップス</div>
-                    <img src={coordination.tops} className="w-full h-[calc(100%-28px)] object-cover" />
+                    <img src={coordination.tops} className="w-full h-[220px] object-cover" />
                   </div>
 
                   <div className="rounded-2xl bg-white border border-black/5 overflow-hidden shadow-sm">
-                    <div className="px-3 py-2 text-[10px] text-gray-500">ボトムス</div>
-                    <img
-                      src={coordination.bottoms}
-                      className="w-full h-[calc(100%-28px)] object-cover"
-                    />
+                    <div className="px-3 py-2 text-[10px] text-gray-500">アウター</div>
+                    <img src={coordination.outers} className="w-full h-[220px] object-cover" />
                   </div>
                 </div>
 
-                <div className="absolute top-4 right-4 w-[42%] rounded-2xl bg-white border border-black/5 overflow-hidden shadow-lg">
-                  <div className="px-3 py-2 text-[10px] text-gray-500">アウター</div>
-                  <img
-                    src={coordination.outers}
-                    className="w-full h-[140px] object-cover"
-                  />
+                {/* 下段：ボトムス */}
+                <div className="mt-3 rounded-2xl bg-white border border-black/5 overflow-hidden shadow-sm">
+                  <div className="px-3 py-2 text-[10px] text-gray-500">ボトムス</div>
+                  <img src={coordination.bottoms} className="w-full h-[260px] object-cover" />
                 </div>
               </div>
 
