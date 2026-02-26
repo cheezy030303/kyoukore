@@ -319,8 +319,8 @@ export default function Home() {
   };
 
   const handleReset = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setClothes({ tops: [], bottoms: [], outers: [] });
+    // 登録した服は残す（localStorageも消さない）
+    // コーデ結果だけ消す
     setCoordination({});
   };
 
@@ -631,7 +631,7 @@ export default function Home() {
           onClick={handleReset}
           className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
         >
-          リセット
+          コーデをクリア
         </button>
 
         {/* Result */}
