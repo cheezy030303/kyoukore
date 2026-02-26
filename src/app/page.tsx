@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type Category = "tops" | "bottoms" | "outers";
 type Mode = "work" | "casual";
@@ -102,13 +102,13 @@ function tempBonusForOuter(outer: ColorTag, temp: number | null): number {
   const light: ColorTag[] = ["white", "beige", "gray"];
   const dark: ColorTag[] = ["black", "navy", "brown"];
 
-  // 暖かい日は「重い色アウター」を少し避ける
+  // 暖かい日は軽い色を優先
   if (temp >= 20) {
     if (light.includes(outer)) return 2;
     if (dark.includes(outer)) return -1;
   }
 
-  // 寒い日は「締まる色アウター」を少し優先
+  // 寒い日は濃い色を優先
   if (temp <= 12) {
     if (dark.includes(outer)) return 2;
     if (light.includes(outer)) return -1;
@@ -116,14 +116,12 @@ function tempBonusForOuter(outer: ColorTag, temp: number | null): number {
 
   return 0;
 }
-function rainPenaltyForBottom(
-  bottom: ColorTag,
-  precip: number | null
-): number {
+
+function rainPenaltyForBottom(bottom: ColorTag, precip: number | null): number {
   if (precip == null) return 0;
   if (precip < 40) return 0;
 
-  // 雨の日は「白・ベージュ」を少し避ける
+  // 雨の日は「白・ベージュ」を少し避ける（汚れが気になる想定）
   if (bottom === "white" || bottom === "beige") return -2;
 
   // 黒・ネイビーは少し安心
@@ -131,6 +129,7 @@ function rainPenaltyForBottom(
 
   return 0;
 }
+
 function scoreOutfit(
   t: ColorTag,
   b: ColorTag,
@@ -146,8 +145,6 @@ function scoreOutfit(
     tempBonusForOuter(o, temp) +
     rainPenaltyForBottom(b, precip)
   );
-}
-  return scorePair(t, b, mode) * 3 + scorePair(o, t, mode) + scorePair(o, b, mode) + tempBonusForOuter(o, temp);
 }
 
 /** iPhone向け：Canvasで合成して共有/保存 */
@@ -172,7 +169,10 @@ function drawCover(
   const ir = img.width / img.height;
   const tr = w / h;
 
-  let sx = 0, sy = 0, sw = img.width, sh = img.height;
+  let sx = 0,
+    sy = 0,
+    sw = img.width,
+    sh = img.height;
 
   if (ir > tr) {
     sh = img.height;
@@ -187,7 +187,14 @@ function drawCover(
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
   const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
@@ -222,7 +229,6 @@ function weatherLabel(w: WeatherInfo | null): string {
 export default function Home() {
   const [category, setCategory] = useState<Category>("tops");
   const [mode, setMode] = useState<Mode>("casual");
-
   const [selectedColor, setSelectedColor] = useState<ColorTag>("black");
 
   const [clothes, setClothes] = useState<Clothes>({
@@ -239,8 +245,6 @@ export default function Home() {
   }>({});
 
   const [isExporting, setIsExporting] = useState(false);
-
-  // ✅ 天気
   const [weather, setWeather] = useState<WeatherInfo | null>(null);
 
   const canGenerate = useMemo(
@@ -260,7 +264,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // 東京固定の天気を取得
     const run = async () => {
       try {
         const res = await fetch("/api/weather", { cache: "no-store" });
@@ -269,7 +272,6 @@ export default function Home() {
         if (json?.error) throw new Error(json?.message ?? "weather error");
         setWeather(json);
       } catch {
-        // 天気が取れなくてもアプリは動く
         setWeather(null);
       }
     };
@@ -309,18 +311,17 @@ export default function Home() {
     e.currentTarget.value = "";
   };
 
-  const handleDelete = (index: number) => {
+  const handleDelete = (cat: Category, index: number) => {
     const updated: Clothes = {
       ...clothes,
-      [category]: clothes[category].filter((_, i) => i !== index),
+      [cat]: clothes[cat].filter((_, i) => i !== index),
     };
     setClothes(updated);
     saveToStorage(updated);
   };
 
+  // ✅ コーデだけ消す（登録服は残す）
   const handleReset = () => {
-    // 登録した服は残す（localStorageも消さない）
-    // コーデ結果だけ消す
     setCoordination({});
   };
 
@@ -330,21 +331,28 @@ export default function Home() {
       return;
     }
 
+    const temp = weather?.temp ?? null;
     const precip = weather?.precip ?? null;
 
     const scored: { t: Item; b: Item; o: Item; score: number }[] = [];
     for (const t of clothes.tops) {
       for (const b of clothes.bottoms) {
         for (const o of clothes.outers) {
-          scored.push({ t, b, o, score: scoreOutfit(t.color, b.color, o.color, mode, temp, precip) });
+          scored.push({
+            t,
+            b,
+            o,
+            score: scoreOutfit(t.color, b.color, o.color, mode, temp, precip),
+          });
         }
       }
     }
+
     scored.sort((a, b) => b.score - a.score);
     const topK = scored.slice(0, Math.min(5, scored.length));
     const picked = pickRandom(topK);
 
-    const weatherLine =
+    const tempLine =
       temp == null
         ? ""
         : temp >= 20
@@ -353,16 +361,23 @@ export default function Home() {
         ? `今日は${Math.round(temp)}℃なので、暖かそうに見えるアウターを優先しました。`
         : `今日は${Math.round(temp)}℃なので、バランス重視で組みました。`;
 
+    const rainLine =
+      precip != null && precip >= 40
+        ? `降水${Math.round(precip)}%なので、汚れが目立ちやすい色は少し避けています。`
+        : "";
+
     const baseReason =
       mode === "work"
         ? `落ち着いた配色（${COLOR_LABEL[picked.t.color]}×${COLOR_LABEL[picked.b.color]}）を軸に、${COLOR_LABEL[picked.o.color]}で全体を整えました。`
         : `合わせやすい配色（${COLOR_LABEL[picked.t.color]}×${COLOR_LABEL[picked.b.color]}）に、${COLOR_LABEL[picked.o.color]}でバランスを取りました。`;
 
+    const reason = [baseReason, tempLine, rainLine].filter(Boolean).join(" ");
+
     setCoordination({
       tops: picked.t,
       bottoms: picked.b,
       outers: picked.o,
-      reason: weatherLine ? `${baseReason} ${weatherLine}` : baseReason,
+      reason,
     });
   };
 
@@ -398,7 +413,6 @@ export default function Home() {
       ctx.font = "24px system-ui, -apple-system, sans-serif";
       ctx.fillText(mode === "work" ? "仕事コーデ" : "普段コーデ", P, 92);
 
-      // 天気も入れる
       ctx.fillStyle = "#888888";
       ctx.font = "18px system-ui, -apple-system, sans-serif";
       ctx.fillText(weatherLabel(weather), P, 118);
@@ -488,8 +502,8 @@ export default function Home() {
             });
             return;
           }
-        } catch (err) {
-          console.log("share canceled or failed:", err);
+        } catch {
+          // ignore → fallback to download
         }
       }
 
@@ -510,14 +524,12 @@ export default function Home() {
         <p className="text-sm text-slate-500 mt-1">smart outfit assistant</p>
         <div className="h-[2px] w-16 bg-rose-200 mx-auto mt-3 rounded-full"></div>
 
-        {/* 天気ピル */}
         <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 text-sm text-slate-700 shadow-sm">
           <span className="w-2 h-2 rounded-full bg-rose-300"></span>
           <span>{weatherLabel(weather)}</span>
         </div>
       </div>
 
-      {/* Main Card */}
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 border border-slate-100 space-y-6">
         {/* Mode */}
         <div className="flex gap-2">
@@ -573,12 +585,12 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <div className="text-xs text-slate-500">今は色だけで“AIっぽく”組み合わせます。</div>
+          <div className="text-xs text-slate-500">今は色×天気で“AIっぽく”組み合わせます。</div>
         </div>
 
         {/* Upload */}
         <label className="block w-full bg-slate-900 text-white text-center py-3 rounded-xl cursor-pointer">
-          ＋ {labelOf(category)}を追加
+          ＋ {labelOf(category)}を追加（最大{MAX_PER_CATEGORY}）
           <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
         </label>
 
@@ -591,7 +603,7 @@ export default function Home() {
                 {COLOR_LABEL[item.color]}
               </div>
               <button
-                onClick={() => handleDelete(index)}
+                onClick={() => handleDelete(category, index)}
                 className="absolute top-2 right-2 bg-black/70 text-white text-xs rounded-full w-6 h-6"
                 aria-label="delete"
               >
@@ -628,11 +640,11 @@ export default function Home() {
         </button>
 
         <button
-  onClick={handleReset}
-  className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
->
-  コーデをクリア
-</button>
+          onClick={handleReset}
+          className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
+        >
+          コーデをクリア
+        </button>
 
         {/* Result */}
         {coordination.tops && coordination.bottoms && coordination.outers && (
@@ -644,6 +656,7 @@ export default function Home() {
               <div className="text-xs text-slate-600 mt-1">{coordination.reason}</div>
             </div>
 
+            {/* 1カードに3枚 */}
             <div className="w-full rounded-2xl border border-slate-200 bg-white p-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
