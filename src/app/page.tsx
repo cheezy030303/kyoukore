@@ -209,13 +209,11 @@ export default function Home() {
     font-semibold
     text-slate-900
     tracking-wide
-    bg-[linear-gradient(135deg,#FDE68A,#FBBF24,#B45309)]
-    shadow-lg
-    ring-1 ring-yellow-200
+    bg-[linear-gradient(to_bottom,#FDE68A,#FBBF24,#B45309)]
+    shadow-[0_4px_12px_rgba(180,83,9,0.25)]
     active:scale-[0.98]
     transition-all
     duration-200
-    shadow-[0_4px_12px_rgba(180,83,9,0.25)]
   "
 >
   コーデ生成
