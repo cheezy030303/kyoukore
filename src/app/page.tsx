@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import html2canvas from "html2canvas";
+
 
 type Clothes = {
   tops: string[];
@@ -125,7 +125,56 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   a.click();
   a.remove();
 }
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    // dataURLなので基本不要だけど念のため
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image load failed"));
+    img.src = src;
+  });
+}
 
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  // object-fit: cover をcanvasで再現
+  const ir = img.width / img.height;
+  const tr = w / h;
+
+  let sx = 0, sy = 0, sw = img.width, sh = img.height;
+
+  if (ir > tr) {
+    // 横長 → 横を切る
+    sh = img.height;
+    sw = sh * tr;
+    sx = (img.width - sw) / 2;
+  } else {
+    // 縦長 → 縦を切る
+    sw = img.width;
+    sh = sw / tr;
+    sy = (img.height - sh) / 2;
+  }
+
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
 export default function Home() {
   const [category, setCategory] = useState<keyof Clothes>("tops");
   const [mode, setMode] = useState<"work" | "casual">("casual");
@@ -279,34 +328,109 @@ export default function Home() {
       alert("先にコーデを生成してね！");
       return;
     }
-    if (!outfitRef.current) {
-      alert("画像化する要素が見つからないよ（再読み込みしてね）");
-      return;
-    }
-
+  
     try {
       setIsExporting(true);
-
-      await waitForImages(outfitRef.current);
-
-      const canvas = await html2canvas(outfitRef.current, {
-        backgroundColor: "#ffffff",
-        scale: 1,
-        useCORS: true,
-        logging: false,
-      });
-
+  
+      const W = 900;
+      const H = 1200;
+      const P = 40;
+      const GAP = 24;
+  
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+  
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("canvas context not found");
+  
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+  
+      ctx.fillStyle = "#111111";
+      ctx.font = "bold 34px system-ui, -apple-system, sans-serif";
+      ctx.fillText("今日これ", P, 56);
+  
+      ctx.fillStyle = "#666666";
+      ctx.font = "24px system-ui, -apple-system, sans-serif";
+      ctx.fillText(mode === "work" ? "仕事コーデ" : "普段コーデ", P, 92);
+  
+      const [topsImg, outersImg, bottomsImg] = await Promise.all([
+        loadImage(coordination.tops),
+        loadImage(coordination.outers),
+        loadImage(coordination.bottoms),
+      ]);
+  
+      const topY = 120;
+      const cardW = (W - P * 2 - GAP) / 2;
+      const cardH = 380;
+  
+      const bottomY = topY + cardH + GAP;
+      const bottomW = W - P * 2;
+      const bottomH = H - bottomY - P;
+  
+      const drawCard = (x: number, y: number, w: number, h: number) => {
+        ctx.save();
+        roundRect(ctx, x, y, w, h, 28);
+        ctx.clip();
+        ctx.fillStyle = "#F5F5F7";
+        ctx.fillRect(x, y, w, h);
+        ctx.restore();
+      };
+  
+      const topsX = P;
+      const outersX = P + cardW + GAP;
+  
+      drawCard(topsX, topY, cardW, cardH);
+      drawCard(outersX, topY, cardW, cardH);
+      drawCard(P, bottomY, bottomW, bottomH);
+  
+      const inner = 16;
+  
+      // tops
+      ctx.save();
+      roundRect(ctx, topsX, topY, cardW, cardH, 28);
+      ctx.clip();
+      drawCover(ctx, topsImg, topsX + inner, topY + 56, cardW - inner * 2, cardH - 72);
+      ctx.restore();
+      ctx.fillStyle = "#666";
+      ctx.font = "20px system-ui, -apple-system, sans-serif";
+      ctx.fillText("トップス", topsX + inner, topY + 38);
+  
+      // outers
+      ctx.save();
+      roundRect(ctx, outersX, topY, cardW, cardH, 28);
+      ctx.clip();
+      drawCover(ctx, outersImg, outersX + inner, topY + 56, cardW - inner * 2, cardH - 72);
+      ctx.restore();
+      ctx.fillStyle = "#666";
+      ctx.font = "20px system-ui, -apple-system, sans-serif";
+      ctx.fillText("アウター", outersX + inner, topY + 38);
+  
+      // bottoms
+      ctx.save();
+      roundRect(ctx, P, bottomY, bottomW, bottomH, 28);
+      ctx.clip();
+      drawCover(ctx, bottomsImg, P + inner, bottomY + 56, bottomW - inner * 2, bottomH - 72);
+      ctx.restore();
+      ctx.fillStyle = "#666";
+      ctx.font = "20px system-ui, -apple-system, sans-serif";
+      ctx.fillText("ボトムス", P + inner, bottomY + 38);
+  
+      ctx.fillStyle = "#AAAAAA";
+      ctx.font = "18px system-ui, -apple-system, sans-serif";
+      ctx.fillText("© kyoukore", P, H - 18);
+  
       const dataUrl = canvas.toDataURL("image/png");
       const filename = `kyoukore_${mode}_${Date.now()}.png`;
-
-      // 共有（対応端末のみ）
+  
       const canShare =
         typeof navigator !== "undefined" &&
         // @ts-ignore
         typeof navigator.share === "function" &&
         // @ts-ignore
         typeof navigator.canShare === "function";
-
+  
       if (canShare) {
         const res = await fetch(dataUrl);
         const blob = await res.blob();
@@ -322,7 +446,7 @@ export default function Home() {
           return;
         }
       }
-
+  
       downloadDataUrl(dataUrl, filename);
     } catch (e) {
       console.error(e);
