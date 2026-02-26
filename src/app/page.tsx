@@ -201,11 +201,28 @@ export default function Home() {
 
         {/* Buttons */}
         <button
-          onClick={generateCoordination}
-          className="w-full bg-slate-900 text-white py-3 rounded-xl font-semibold shadow-md hover:bg-slate-800 transition"
-        >
-          コーデ生成
-        </button>
+  onClick={generateCoordination}
+  className="
+  w-full
+  py-3
+  rounded-xl
+  font-semibold
+  text-white
+  bg-gradient-to-r
+  from-amber-400
+  via-amber-500
+  to-amber-600
+  shadow-md
+  ring-1 ring-amber-200
+  hover:from-amber-500
+  hover:to-amber-700
+  active:scale-[0.98]
+  transition-all
+  duration-200
+"
+>
+  コーデ生成
+</button>
 
         <button
           onClick={handleReset}
