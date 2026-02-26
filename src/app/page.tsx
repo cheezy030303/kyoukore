@@ -502,10 +502,10 @@ export default function Home() {
     py-3
     rounded-xl
     font-semibold
-    text-slate-100
+    text-white
     tracking-wide
-    bg-[linear-gradient(to_bottom,#E7B5B5,#C08484,#9F6A6A)]
-    shadow-[0_6px_18px_rgba(159,106,106,0.25)]
+    bg-[linear-gradient(to_bottom,#F4B6C2,#E78CA5,#C85C8E)]
+    shadow-[0_6px_18px_rgba(200,92,142,0.25)]
     active:scale-[0.98]
     transition-all
     duration-200
