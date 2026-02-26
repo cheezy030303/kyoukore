@@ -628,11 +628,11 @@ export default function Home() {
         </button>
 
         <button
-          onClick={handleReset}
-          className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
-        >
-          コーデをクリア
-        </button>
+  onClick={handleReset}
+  className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
+>
+  コーデをクリア
+</button>
 
         {/* Result */}
         {coordination.tops && coordination.bottoms && coordination.outers && (
