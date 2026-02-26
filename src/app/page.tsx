@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-type Category = "tops" | "bottoms" | "outers";
+type Category = "tops" | "bottoms" | "outers" | "shoes" | "bags" | "accessories";
 type Mode = "work" | "casual";
 
 type ColorTag =
@@ -34,7 +34,7 @@ type WeatherInfo = {
   time: string | null;
 };
 
-const STORAGE_KEY = "clothesData_v3";
+const STORAGE_KEY = "clothesData_v4";
 const MAX_PER_CATEGORY = 5;
 
 const COLOR_LABEL: Record<ColorTag, string> = {
@@ -117,34 +117,60 @@ function tempBonusForOuter(outer: ColorTag, temp: number | null): number {
   return 0;
 }
 
+function rainPenaltyForLightItem(color: ColorTag, precip: number | null): number {
+  if (precip == null) return 0;
+  if (precip < 40) return 0;
+
+  // 雨の日：淡色（白/ベージュ/グレー）をちょい避ける（汚れ・水はね想定）
+  if (color === "white" || color === "beige" || color === "gray") return -1;
+
+  // 黒/ネイビーは安心
+  if (color === "black" || color === "navy") return 1;
+
+  return 0;
+}
+
 function rainPenaltyForBottom(bottom: ColorTag, precip: number | null): number {
   if (precip == null) return 0;
   if (precip < 40) return 0;
 
-  // 雨の日は「白・ベージュ」を少し避ける（汚れが気になる想定）
   if (bottom === "white" || bottom === "beige") return -2;
-
-  // 黒・ネイビーは少し安心
   if (bottom === "black" || bottom === "navy") return 1;
 
   return 0;
 }
 
-function scoreOutfit(
+function scoreOutfit6(
   t: ColorTag,
   b: ColorTag,
   o: ColorTag,
+  s: ColorTag,
+  bag: ColorTag,
+  acc: ColorTag,
   mode: Mode,
   temp: number | null,
   precip: number | null
 ): number {
-  return (
+  // 軸：トップス×ボトムスを重めに
+  const base =
     scorePair(t, b, mode) * 3 +
     scorePair(o, t, mode) +
     scorePair(o, b, mode) +
+    scorePair(s, b, mode) +
+    scorePair(s, bag, mode) +
+    scorePair(bag, t, mode) +
+    scorePair(acc, t, mode);
+
+  const weather =
     tempBonusForOuter(o, temp) +
-    rainPenaltyForBottom(b, precip)
-  );
+    rainPenaltyForBottom(b, precip) +
+    rainPenaltyForLightItem(s, precip) +
+    rainPenaltyForLightItem(bag, precip);
+
+  // 仕事は柄×柄をさらに避けたい
+  const workTight = mode === "work" && (acc === "pattern" || bag === "pattern" || s === "pattern") ? -1 : 0;
+
+  return base + weather + workTight;
 }
 
 /** iPhone向け：Canvasで合成して共有/保存 */
@@ -235,28 +261,50 @@ export default function Home() {
     tops: [],
     bottoms: [],
     outers: [],
+    shoes: [],
+    bags: [],
+    accessories: [],
   });
 
   const [coordination, setCoordination] = useState<{
     tops?: Item;
     bottoms?: Item;
     outers?: Item;
+    shoes?: Item;
+    bags?: Item;
+    accessories?: Item;
     reason?: string;
   }>({});
 
   const [isExporting, setIsExporting] = useState(false);
   const [weather, setWeather] = useState<WeatherInfo | null>(null);
 
-  const canGenerate = useMemo(
-    () => clothes.tops.length > 0 && clothes.bottoms.length > 0 && clothes.outers.length > 0,
-    [clothes]
-  );
+  const canGenerate = useMemo(() => {
+    return (
+      clothes.tops.length > 0 &&
+      clothes.bottoms.length > 0 &&
+      clothes.outers.length > 0 &&
+      clothes.shoes.length > 0 &&
+      clothes.bags.length > 0 &&
+      clothes.accessories.length > 0
+    );
+  }, [clothes]);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        setClothes(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // 古いデータでも落ちないように補完
+        const merged: Clothes = {
+          tops: parsed.tops ?? [],
+          bottoms: parsed.bottoms ?? [],
+          outers: parsed.outers ?? [],
+          shoes: parsed.shoes ?? [],
+          bags: parsed.bags ?? [],
+          accessories: parsed.accessories ?? [],
+        };
+        setClothes(merged);
       } catch {
         // ignore
       }
@@ -282,8 +330,14 @@ export default function Home() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   };
 
-  const labelOf = (cat: Category) =>
-    cat === "tops" ? "トップス" : cat === "bottoms" ? "ボトムス" : "アウター";
+  const labelOf = (cat: Category) => {
+    if (cat === "tops") return "トップス";
+    if (cat === "bottoms") return "ボトムス";
+    if (cat === "outers") return "アウター";
+    if (cat === "shoes") return "靴";
+    if (cat === "bags") return "バッグ";
+    return "アクセ";
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -320,36 +374,64 @@ export default function Home() {
     saveToStorage(updated);
   };
 
-  // ✅ コーデだけ消す（登録服は残す）
+  // ✅ コーデだけ消す（登録は残す）
   const handleReset = () => {
     setCoordination({});
   };
 
   const generateCoordination = () => {
     if (!canGenerate) {
-      alert("トップス・ボトムス・アウターを1つ以上登録してね");
+      alert("すべてのカテゴリを1つ以上登録してね（トップス/ボトムス/アウター/靴/バッグ/アクセ）");
       return;
     }
 
     const temp = weather?.temp ?? null;
     const precip = weather?.precip ?? null;
 
-    const scored: { t: Item; b: Item; o: Item; score: number }[] = [];
+    const scored: {
+      t: Item;
+      b: Item;
+      o: Item;
+      s: Item;
+      bag: Item;
+      acc: Item;
+      score: number;
+    }[] = [];
+
     for (const t of clothes.tops) {
       for (const b of clothes.bottoms) {
         for (const o of clothes.outers) {
-          scored.push({
-            t,
-            b,
-            o,
-            score: scoreOutfit(t.color, b.color, o.color, mode, temp, precip),
-          });
+          for (const s of clothes.shoes) {
+            for (const bag of clothes.bags) {
+              for (const acc of clothes.accessories) {
+                scored.push({
+                  t,
+                  b,
+                  o,
+                  s,
+                  bag,
+                  acc,
+                  score: scoreOutfit6(
+                    t.color,
+                    b.color,
+                    o.color,
+                    s.color,
+                    bag.color,
+                    acc.color,
+                    mode,
+                    temp,
+                    precip
+                  ),
+                });
+              }
+            }
+          }
         }
       }
     }
 
     scored.sort((a, b) => b.score - a.score);
-    const topK = scored.slice(0, Math.min(5, scored.length));
+    const topK = scored.slice(0, Math.min(8, scored.length));
     const picked = pickRandom(topK);
 
     const tempLine =
@@ -358,31 +440,43 @@ export default function Home() {
         : temp >= 20
         ? `今日は${Math.round(temp)}℃なので、重く見えにくいアウター寄りにしました。`
         : temp <= 12
-        ? `今日は${Math.round(temp)}℃なので、暖かそうに見えるアウターを優先しました。`
+        ? `今日は${Math.round(temp)}℃なので、締まる色のアウターで引き締めました。`
         : `今日は${Math.round(temp)}℃なので、バランス重視で組みました。`;
 
     const rainLine =
       precip != null && precip >= 40
-        ? `降水${Math.round(precip)}%なので、汚れが目立ちやすい色は少し避けています。`
+        ? `降水${Math.round(precip)}%なので、淡色の靴/バッグは少し避けています。`
         : "";
 
     const baseReason =
       mode === "work"
-        ? `落ち着いた配色（${COLOR_LABEL[picked.t.color]}×${COLOR_LABEL[picked.b.color]}）を軸に、${COLOR_LABEL[picked.o.color]}で全体を整えました。`
-        : `合わせやすい配色（${COLOR_LABEL[picked.t.color]}×${COLOR_LABEL[picked.b.color]}）に、${COLOR_LABEL[picked.o.color]}でバランスを取りました。`;
+        ? `無難に失敗しにくい配色（${COLOR_LABEL[picked.t.color]}×${COLOR_LABEL[picked.b.color]}）を軸に、靴とバッグで整えました。`
+        : `合わせやすい配色（${COLOR_LABEL[picked.t.color]}×${COLOR_LABEL[picked.b.color]}）に、小物で“ちょい垢抜け”を足しました。`;
 
-    const reason = [baseReason, tempLine, rainLine].filter(Boolean).join(" ");
+    const itemLine = `靴：${COLOR_LABEL[picked.s.color]} / バッグ：${COLOR_LABEL[picked.bag.color]} / アクセ：${COLOR_LABEL[picked.acc.color]}`;
+
+    const reason = [baseReason, itemLine, tempLine, rainLine].filter(Boolean).join(" ");
 
     setCoordination({
       tops: picked.t,
       bottoms: picked.b,
       outers: picked.o,
+      shoes: picked.s,
+      bags: picked.bag,
+      accessories: picked.acc,
       reason,
     });
   };
 
   const exportOutfitImage = async () => {
-    if (!coordination.tops || !coordination.bottoms || !coordination.outers) {
+    if (
+      !coordination.tops ||
+      !coordination.bottoms ||
+      !coordination.outers ||
+      !coordination.shoes ||
+      !coordination.bags ||
+      !coordination.accessories
+    ) {
       alert("先にコーデを生成してね！");
       return;
     }
@@ -391,9 +485,9 @@ export default function Home() {
       setIsExporting(true);
 
       const W = 900;
-      const H = 1200;
+      const H = 1400;
       const P = 40;
-      const GAP = 24;
+      const GAP = 22;
 
       const canvas = document.createElement("canvas");
       canvas.width = W;
@@ -417,19 +511,34 @@ export default function Home() {
       ctx.font = "18px system-ui, -apple-system, sans-serif";
       ctx.fillText(weatherLabel(weather), P, 118);
 
-      const [topsImg, outersImg, bottomsImg] = await Promise.all([
-        loadImage(coordination.tops.image),
-        loadImage(coordination.outers.image),
-        loadImage(coordination.bottoms.image),
-      ]);
+      const [topsImg, outersImg, bottomsImg, shoesImg, bagImg, accImg] =
+        await Promise.all([
+          loadImage(coordination.tops.image),
+          loadImage(coordination.outers.image),
+          loadImage(coordination.bottoms.image),
+          loadImage(coordination.shoes.image),
+          loadImage(coordination.bags.image),
+          loadImage(coordination.accessories.image),
+        ]);
 
       const topY = 140;
-      const cardW = (W - P * 2 - GAP) / 2;
-      const cardH = 360;
 
-      const bottomY = topY + cardH + GAP;
-      const bottomW = W - P * 2;
-      const bottomH = H - bottomY - P;
+      // Row1: tops + outers
+      const cardW = (W - P * 2 - GAP) / 2;
+      const cardH = 320;
+      const row1Y = topY;
+
+      // Row2: bottoms full
+      const row2Y = row1Y + cardH + GAP;
+      const bottomH = 360;
+
+      // Row3: shoes + bag
+      const row3Y = row2Y + bottomH + GAP;
+      const row3H = 280;
+
+      // Row4: accessory full small
+      const row4Y = row3Y + row3H + GAP;
+      const accH = H - row4Y - P;
 
       const drawCard = (x: number, y: number, w: number, h: number) => {
         ctx.save();
@@ -440,37 +549,65 @@ export default function Home() {
         ctx.restore();
       };
 
-      const topsX = P;
-      const outersX = P + cardW + GAP;
-
-      drawCard(topsX, topY, cardW, cardH);
-      drawCard(outersX, topY, cardW, cardH);
-      drawCard(P, bottomY, bottomW, bottomH);
-
-      const inner = 16;
-
       ctx.fillStyle = "#666";
       ctx.font = "20px system-ui, -apple-system, sans-serif";
 
+      const inner = 16;
+
+      // Tops
+      const topsX = P;
+      drawCard(topsX, row1Y, cardW, cardH);
       ctx.save();
-      roundRect(ctx, topsX, topY, cardW, cardH, 28);
+      roundRect(ctx, topsX, row1Y, cardW, cardH, 28);
       ctx.clip();
-      ctx.fillText(`トップス（${COLOR_LABEL[coordination.tops.color]}）`, topsX + inner, topY + 38);
-      drawCover(ctx, topsImg, topsX + inner, topY + 56, cardW - inner * 2, cardH - 72);
+      ctx.fillText(`トップス（${COLOR_LABEL[coordination.tops.color]}）`, topsX + inner, row1Y + 38);
+      drawCover(ctx, topsImg, topsX + inner, row1Y + 56, cardW - inner * 2, cardH - 72);
       ctx.restore();
 
+      // Outers
+      const outersX = P + cardW + GAP;
+      drawCard(outersX, row1Y, cardW, cardH);
       ctx.save();
-      roundRect(ctx, outersX, topY, cardW, cardH, 28);
+      roundRect(ctx, outersX, row1Y, cardW, cardH, 28);
       ctx.clip();
-      ctx.fillText(`アウター（${COLOR_LABEL[coordination.outers.color]}）`, outersX + inner, topY + 38);
-      drawCover(ctx, outersImg, outersX + inner, topY + 56, cardW - inner * 2, cardH - 72);
+      ctx.fillText(`アウター（${COLOR_LABEL[coordination.outers.color]}）`, outersX + inner, row1Y + 38);
+      drawCover(ctx, outersImg, outersX + inner, row1Y + 56, cardW - inner * 2, cardH - 72);
       ctx.restore();
 
+      // Bottoms full
+      drawCard(P, row2Y, W - P * 2, bottomH);
       ctx.save();
-      roundRect(ctx, P, bottomY, bottomW, bottomH, 28);
+      roundRect(ctx, P, row2Y, W - P * 2, bottomH, 28);
       ctx.clip();
-      ctx.fillText(`ボトムス（${COLOR_LABEL[coordination.bottoms.color]}）`, P + inner, bottomY + 38);
-      drawCover(ctx, bottomsImg, P + inner, bottomY + 56, bottomW - inner * 2, bottomH - 72);
+      ctx.fillText(`ボトムス（${COLOR_LABEL[coordination.bottoms.color]}）`, P + inner, row2Y + 38);
+      drawCover(ctx, bottomsImg, P + inner, row2Y + 56, W - P * 2 - inner * 2, bottomH - 72);
+      ctx.restore();
+
+      // Shoes
+      drawCard(P, row3Y, cardW, row3H);
+      ctx.save();
+      roundRect(ctx, P, row3Y, cardW, row3H, 28);
+      ctx.clip();
+      ctx.fillText(`靴（${COLOR_LABEL[coordination.shoes.color]}）`, P + inner, row3Y + 38);
+      drawCover(ctx, shoesImg, P + inner, row3Y + 56, cardW - inner * 2, row3H - 72);
+      ctx.restore();
+
+      // Bag
+      drawCard(outersX, row3Y, cardW, row3H);
+      ctx.save();
+      roundRect(ctx, outersX, row3Y, cardW, row3H, 28);
+      ctx.clip();
+      ctx.fillText(`バッグ（${COLOR_LABEL[coordination.bags.color]}）`, outersX + inner, row3Y + 38);
+      drawCover(ctx, bagImg, outersX + inner, row3Y + 56, cardW - inner * 2, row3H - 72);
+      ctx.restore();
+
+      // Accessory full
+      drawCard(P, row4Y, W - P * 2, accH);
+      ctx.save();
+      roundRect(ctx, P, row4Y, W - P * 2, accH, 28);
+      ctx.clip();
+      ctx.fillText(`アクセ（${COLOR_LABEL[coordination.accessories.color]}）`, P + inner, row4Y + 38);
+      drawCover(ctx, accImg, P + inner, row4Y + 56, W - P * 2 - inner * 2, accH - 72);
       ctx.restore();
 
       ctx.fillStyle = "#AAAAAA";
@@ -503,7 +640,7 @@ export default function Home() {
             return;
           }
         } catch {
-          // ignore → fallback to download
+          // ignore → fallback
         }
       }
 
@@ -553,7 +690,7 @@ export default function Home() {
 
         {/* Category Tabs */}
         <div className="grid grid-cols-3 gap-2 text-sm">
-          {(["tops", "bottoms", "outers"] as const).map((cat) => (
+          {(["tops", "bottoms", "outers", "shoes", "bags", "accessories"] as const).map((cat) => (
             <button
               key={cat}
               onClick={() => setCategory(cat)}
@@ -585,7 +722,9 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <div className="text-xs text-slate-500">今は色×天気で“AIっぽく”組み合わせます。</div>
+          <div className="text-xs text-slate-500">
+            服は変えずに、色×天気×小物で「失敗しにくい垢抜け」を作ります。
+          </div>
         </div>
 
         {/* Upload */}
@@ -647,54 +786,82 @@ export default function Home() {
         </button>
 
         {/* Result */}
-        {coordination.tops && coordination.bottoms && coordination.outers && (
-          <div className="space-y-3 pt-4 border-t border-slate-200">
-            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-              <div className="text-sm font-semibold text-slate-800">
-                {mode === "work" ? "仕事コーデ" : "普段コーデ"}
+        {coordination.tops &&
+          coordination.bottoms &&
+          coordination.outers &&
+          coordination.shoes &&
+          coordination.bags &&
+          coordination.accessories && (
+            <div className="space-y-3 pt-4 border-t border-slate-200">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                <div className="text-sm font-semibold text-slate-800">
+                  {mode === "work" ? "仕事コーデ" : "普段コーデ"}
+                </div>
+                <div className="text-xs text-slate-600 mt-1">{coordination.reason}</div>
               </div>
-              <div className="text-xs text-slate-600 mt-1">{coordination.reason}</div>
-            </div>
 
-            {/* 1カードに3枚 */}
-            <div className="w-full rounded-2xl border border-slate-200 bg-white p-3">
-              <div className="grid grid-cols-2 gap-3">
+              {/* まとめ表示 */}
+              <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
+                    <div className="px-3 py-2 text-xs text-slate-600">
+                      トップス（{COLOR_LABEL[coordination.tops.color]}）
+                    </div>
+                    <img src={coordination.tops.image} className="w-full h-44 object-cover" />
+                  </div>
+
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
+                    <div className="px-3 py-2 text-xs text-slate-600">
+                      アウター（{COLOR_LABEL[coordination.outers.color]}）
+                    </div>
+                    <img src={coordination.outers.image} className="w-full h-44 object-cover" />
+                  </div>
+                </div>
+
                 <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
                   <div className="px-3 py-2 text-xs text-slate-600">
-                    トップス（{COLOR_LABEL[coordination.tops.color]}）
+                    ボトムス（{COLOR_LABEL[coordination.bottoms.color]}）
                   </div>
-                  <img src={coordination.tops.image} className="w-full h-44 object-cover" />
+                  <img src={coordination.bottoms.image} className="w-full h-56 object-cover" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
+                    <div className="px-3 py-2 text-xs text-slate-600">
+                      靴（{COLOR_LABEL[coordination.shoes.color]}）
+                    </div>
+                    <img src={coordination.shoes.image} className="w-full h-40 object-cover" />
+                  </div>
+
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
+                    <div className="px-3 py-2 text-xs text-slate-600">
+                      バッグ（{COLOR_LABEL[coordination.bags.color]}）
+                    </div>
+                    <img src={coordination.bags.image} className="w-full h-40 object-cover" />
+                  </div>
                 </div>
 
                 <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
                   <div className="px-3 py-2 text-xs text-slate-600">
-                    アウター（{COLOR_LABEL[coordination.outers.color]}）
+                    アクセ（{COLOR_LABEL[coordination.accessories.color]}）
                   </div>
-                  <img src={coordination.outers.image} className="w-full h-44 object-cover" />
+                  <img src={coordination.accessories.image} className="w-full h-40 object-cover" />
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 bg-white">
-                <div className="px-3 py-2 text-xs text-slate-600">
-                  ボトムス（{COLOR_LABEL[coordination.bottoms.color]}）
-                </div>
-                <img src={coordination.bottoms.image} className="w-full h-56 object-cover" />
-              </div>
+              <button
+                onClick={exportOutfitImage}
+                disabled={isExporting}
+                className={`w-full py-3 rounded-xl font-semibold transition ${
+                  isExporting
+                    ? "bg-slate-200 text-slate-500"
+                    : "bg-slate-900 text-white hover:bg-slate-800 active:scale-[0.98]"
+                }`}
+              >
+                {isExporting ? "画像を作成中…" : "画像として保存 / 共有"}
+              </button>
             </div>
-
-            <button
-              onClick={exportOutfitImage}
-              disabled={isExporting}
-              className={`w-full py-3 rounded-xl font-semibold transition ${
-                isExporting
-                  ? "bg-slate-200 text-slate-500"
-                  : "bg-slate-900 text-white hover:bg-slate-800 active:scale-[0.98]"
-              }`}
-            >
-              {isExporting ? "画像を作成中…" : "画像として保存 / 共有"}
-            </button>
-          </div>
-        )}
+          )}
       </div>
     </main>
   );
