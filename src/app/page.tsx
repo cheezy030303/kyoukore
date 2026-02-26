@@ -436,15 +436,22 @@ export default function Home() {
         const blob = await res.blob();
         const file = new File([blob], filename, { type: "image/png" });
         // @ts-ignore
-        if (navigator.canShare({ files: [file] })) {
-          // @ts-ignore
-          await navigator.share({
-            title: "今日これ",
-            text: "今日のコーデ",
-            files: [file],
-          });
-          return;
-        }
+        // @ts-ignore
+if (navigator.canShare({ files: [file] })) {
+  try {
+    // @ts-ignore
+    await navigator.share({
+      title: "今日これ",
+      text: "今日のコーデ",
+      files: [file],
+    });
+    // ✅ 共有できたら成功として終了
+    return;
+  } catch (err) {
+    // ✅ iPhoneは「キャンセル」でもエラーになることがあるので、無視して次へ
+    console.log("share canceled or failed:", err);
+  }
+}
       }
   
       downloadDataUrl(dataUrl, filename);
