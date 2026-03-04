@@ -58,14 +58,44 @@ function labelOf(cat: Category) {
   return "アクセ";
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+async function fileToDataUrl(file: File): Promise<string> {
+    // 1) まず読み込み
+    const original = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  
+    // 2) 画像としてロード
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("image load failed"));
+      i.src = original;
+    });
+  
+    // 3) 長辺を最大900pxに縮小（スマホなら十分きれい）
+    const MAX = 900;
+    const w = img.width;
+    const h = img.height;
+    const scale = Math.min(1, MAX / Math.max(w, h));
+    const nw = Math.round(w * scale);
+    const nh = Math.round(h * scale);
+  
+    const canvas = document.createElement("canvas");
+    canvas.width = nw;
+    canvas.height = nh;
+  
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return original;
+  
+    ctx.drawImage(img, 0, 0, nw, nh);
+  
+    // 4) JPEG圧縮（0.82くらいがバランス良い）
+    // ※ PNGより軽くなる
+    return canvas.toDataURL("image/jpeg", 0.82);
+  }
 
 export default function WardrobePage() {
   const [category, setCategory] = useState<Category>("tops");
@@ -101,7 +131,14 @@ export default function WardrobePage() {
   }, []);
 
   const saveToStorage = (data: Clothes) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.error(e);
+      alert(
+        "保存容量がいっぱいで保存できませんでした。\n写真を少し減らすか、同じ服は撮り直し（小さめ）で入れてね。"
+      );
+    }
   };
 
   const counts = useMemo(() => {
