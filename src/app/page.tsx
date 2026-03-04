@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import BottomTab from "@/components/BottomTab";
 
 type Category = "tops" | "bottoms" | "outers" | "shoes" | "bags" | "accessories";
 type Mode = "work" | "casual";
@@ -35,7 +36,6 @@ type WeatherInfo = {
 };
 
 const STORAGE_KEY = "clothesData_v4";
-const MAX_PER_CATEGORY = 5;
 
 const COLOR_LABEL: Record<ColorTag, string> = {
   black: "黒",
@@ -47,27 +47,6 @@ const COLOR_LABEL: Record<ColorTag, string> = {
   color: "カラー",
   pattern: "柄",
 };
-
-const COLOR_DOT: Record<ColorTag, string> = {
-  black: "bg-black",
-  white: "bg-white border border-slate-200",
-  navy: "bg-slate-800",
-  beige: "bg-[#E7D7C5]",
-  gray: "bg-slate-300",
-  brown: "bg-[#7A5C46]",
-  color: "bg-gradient-to-b from-pink-300 to-indigo-400",
-  pattern:
-    "bg-[repeating-linear-gradient(45deg,#111_0,#111_6px,#fff_6px,#fff_12px)]",
-};
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -102,13 +81,11 @@ function tempBonusForOuter(outer: ColorTag, temp: number | null): number {
   const light: ColorTag[] = ["white", "beige", "gray"];
   const dark: ColorTag[] = ["black", "navy", "brown"];
 
-  // 暖かい日は軽い色を優先
   if (temp >= 20) {
     if (light.includes(outer)) return 2;
     if (dark.includes(outer)) return -1;
   }
 
-  // 寒い日は濃い色を優先
   if (temp <= 12) {
     if (dark.includes(outer)) return 2;
     if (light.includes(outer)) return -1;
@@ -121,12 +98,8 @@ function rainPenaltyForLightItem(color: ColorTag, precip: number | null): number
   if (precip == null) return 0;
   if (precip < 40) return 0;
 
-  // 雨の日：淡色（白/ベージュ/グレー）をちょい避ける（汚れ・水はね想定）
   if (color === "white" || color === "beige" || color === "gray") return -1;
-
-  // 黒/ネイビーは安心
   if (color === "black" || color === "navy") return 1;
-
   return 0;
 }
 
@@ -136,7 +109,6 @@ function rainPenaltyForBottom(bottom: ColorTag, precip: number | null): number {
 
   if (bottom === "white" || bottom === "beige") return -2;
   if (bottom === "black" || bottom === "navy") return 1;
-
   return 0;
 }
 
@@ -151,7 +123,6 @@ function scoreOutfit6(
   temp: number | null,
   precip: number | null
 ): number {
-  // 軸：トップス×ボトムスを重めに
   const base =
     scorePair(t, b, mode) * 3 +
     scorePair(o, t, mode) +
@@ -164,13 +135,9 @@ function scoreOutfit6(
   const weather =
     tempBonusForOuter(o, temp) +
     rainPenaltyForBottom(b, precip) +
-    // 雨の日は靴・バッグ淡色を少し避ける（現実寄り）
     rainPenaltyForLightItem(s, precip) * 2 +
     rainPenaltyForLightItem(bag, precip) * 2;
 
-  // ========= 垢抜けルール =========
-
-  // 仕事：靴とバッグを揃えると「きちんと感」
   const workPolish =
     mode === "work"
       ? s === bag
@@ -180,18 +147,16 @@ function scoreOutfit6(
         : 0
       : 0;
 
-  // 普段：差し色は「どちらか1点」がちょうどいい
   const isAccent = (c: ColorTag) => c === "color" || c === "pattern";
   const casualAccent =
     mode === "casual"
       ? isAccent(s) && isAccent(bag)
-        ? -2 // 両方アクセントはやりすぎ
+        ? -2
         : isAccent(s) || isAccent(bag)
-        ? 2 // どちらか1点アクセントで垢抜け
+        ? 2
         : 0
       : 0;
 
-  // 仕事：柄アイテム（靴/バッグ/アクセ）が多いと落ち着きに欠ける
   const workTight =
     mode === "work"
       ? (acc === "pattern" ? -1 : 0) +
@@ -281,11 +246,17 @@ function weatherLabel(w: WeatherInfo | null): string {
   return `${w.city} ${t}℃ ${range}${rain}`;
 }
 
-export default function Home() {
-  const [category, setCategory] = useState<Category>("tops");
-  const [mode, setMode] = useState<Mode>("casual");
-  const [selectedColor, setSelectedColor] = useState<ColorTag>("black");
+function labelOf(cat: Category) {
+  if (cat === "tops") return "トップス";
+  if (cat === "bottoms") return "ボトムス";
+  if (cat === "outers") return "アウター";
+  if (cat === "shoes") return "靴";
+  if (cat === "bags") return "バッグ";
+  return "アクセ";
+}
 
+export default function Home() {
+  const [mode, setMode] = useState<Mode>("casual");
   const [clothes, setClothes] = useState<Clothes>({
     tops: [],
     bottoms: [],
@@ -308,23 +279,11 @@ export default function Home() {
   const [isExporting, setIsExporting] = useState(false);
   const [weather, setWeather] = useState<WeatherInfo | null>(null);
 
-  const canGenerate = useMemo(() => {
-    return (
-      clothes.tops.length > 0 &&
-      clothes.bottoms.length > 0 &&
-      clothes.outers.length > 0 &&
-      clothes.shoes.length > 0 &&
-      clothes.bags.length > 0 &&
-      clothes.accessories.length > 0
-    );
-  }, [clothes]);
-
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // 古いデータでも落ちないように補完
         const merged: Clothes = {
           tops: parsed.tops ?? [],
           bottoms: parsed.bottoms ?? [],
@@ -355,62 +314,36 @@ export default function Home() {
     run();
   }, []);
 
-  const saveToStorage = (data: Clothes) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  };
-
-  const labelOf = (cat: Category) => {
-    if (cat === "tops") return "トップス";
-    if (cat === "bottoms") return "ボトムス";
-    if (cat === "outers") return "アウター";
-    if (cat === "shoes") return "靴";
-    if (cat === "bags") return "バッグ";
-    return "アクセ";
-  };
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (clothes[category].length >= MAX_PER_CATEGORY) {
-      alert("最大5個までです");
-      return;
-    }
-
-    const dataUrl = await fileToDataUrl(file);
-    const newItem: Item = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      image: dataUrl,
-      color: selectedColor,
+  const counts = useMemo(() => {
+    const c: Record<Category, number> = {
+      tops: clothes.tops.length,
+      bottoms: clothes.bottoms.length,
+      outers: clothes.outers.length,
+      shoes: clothes.shoes.length,
+      bags: clothes.bags.length,
+      accessories: clothes.accessories.length,
     };
+    return c;
+  }, [clothes]);
 
-    const updated: Clothes = {
-      ...clothes,
-      [category]: [...clothes[category], newItem],
-    };
+  const canGenerate = useMemo(() => {
+    return (
+      clothes.tops.length > 0 &&
+      clothes.bottoms.length > 0 &&
+      clothes.outers.length > 0 &&
+      clothes.shoes.length > 0 &&
+      clothes.bags.length > 0 &&
+      clothes.accessories.length > 0
+    );
+  }, [clothes]);
 
-    setClothes(updated);
-    saveToStorage(updated);
-    e.currentTarget.value = "";
-  };
-
-  const handleDelete = (cat: Category, index: number) => {
-    const updated: Clothes = {
-      ...clothes,
-      [cat]: clothes[cat].filter((_, i) => i !== index),
-    };
-    setClothes(updated);
-    saveToStorage(updated);
-  };
-
-  // ✅ コーデだけ消す（登録は残す）
-  const handleReset = () => {
-    setCoordination({});
-  };
+  const handleClearCoord = () => setCoordination({});
 
   const generateCoordination = () => {
     if (!canGenerate) {
-      alert("すべてのカテゴリを1つ以上登録してね（トップス/ボトムス/アウター/靴/バッグ/アクセ）");
+      alert(
+        "ワードローブで全カテゴリを1つ以上登録してね（トップス/ボトムス/アウター/靴/バッグ/アクセ）"
+      );
       return;
     }
 
@@ -551,21 +484,16 @@ export default function Home() {
         ]);
 
       const topY = 140;
-
-      // Row1: tops + outers
       const cardW = (W - P * 2 - GAP) / 2;
       const cardH = 320;
       const row1Y = topY;
 
-      // Row2: bottoms full
       const row2Y = row1Y + cardH + GAP;
       const bottomH = 360;
 
-      // Row3: shoes + bag
       const row3Y = row2Y + bottomH + GAP;
       const row3H = 280;
 
-      // Row4: accessory full small
       const row4Y = row3Y + row3H + GAP;
       const accH = H - row4Y - P;
 
@@ -580,10 +508,8 @@ export default function Home() {
 
       ctx.fillStyle = "#666";
       ctx.font = "20px system-ui, -apple-system, sans-serif";
-
       const inner = 16;
 
-      // Tops
       const topsX = P;
       drawCard(topsX, row1Y, cardW, cardH);
       ctx.save();
@@ -593,7 +519,6 @@ export default function Home() {
       drawCover(ctx, topsImg, topsX + inner, row1Y + 56, cardW - inner * 2, cardH - 72);
       ctx.restore();
 
-      // Outers
       const outersX = P + cardW + GAP;
       drawCard(outersX, row1Y, cardW, cardH);
       ctx.save();
@@ -603,7 +528,6 @@ export default function Home() {
       drawCover(ctx, outersImg, outersX + inner, row1Y + 56, cardW - inner * 2, cardH - 72);
       ctx.restore();
 
-      // Bottoms full
       drawCard(P, row2Y, W - P * 2, bottomH);
       ctx.save();
       roundRect(ctx, P, row2Y, W - P * 2, bottomH, 28);
@@ -612,7 +536,6 @@ export default function Home() {
       drawCover(ctx, bottomsImg, P + inner, row2Y + 56, W - P * 2 - inner * 2, bottomH - 72);
       ctx.restore();
 
-      // Shoes
       drawCard(P, row3Y, cardW, row3H);
       ctx.save();
       roundRect(ctx, P, row3Y, cardW, row3H, 28);
@@ -621,7 +544,6 @@ export default function Home() {
       drawCover(ctx, shoesImg, P + inner, row3Y + 56, cardW - inner * 2, row3H - 72);
       ctx.restore();
 
-      // Bag
       drawCard(outersX, row3Y, cardW, row3H);
       ctx.save();
       roundRect(ctx, outersX, row3Y, cardW, row3H, 28);
@@ -630,7 +552,6 @@ export default function Home() {
       drawCover(ctx, bagImg, outersX + inner, row3Y + 56, cardW - inner * 2, row3H - 72);
       ctx.restore();
 
-      // Accessory full
       drawCard(P, row4Y, W - P * 2, accH);
       ctx.save();
       roundRect(ctx, P, row4Y, W - P * 2, accH, 28);
@@ -669,7 +590,7 @@ export default function Home() {
             return;
           }
         } catch {
-          // ignore → fallback
+          // ignore
         }
       }
 
@@ -683,7 +604,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-white to-slate-100 flex flex-col items-center px-4 py-10">
+    <main className="min-h-screen bg-gradient-to-b from-white to-slate-100 flex flex-col items-center px-4 pt-10 pb-28">
       {/* Header */}
       <div className="w-full max-w-md text-center mb-6">
         <h1 className="text-3xl font-bold text-slate-900 tracking-wide">今日これ</h1>
@@ -717,102 +638,60 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Category Tabs */}
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          {(["tops", "bottoms", "outers", "shoes", "bags", "accessories"] as const).map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`py-2 rounded-xl border transition ${
-                category === cat
-                  ? "border-rose-200 text-rose-500 bg-rose-50"
-                  : "border-slate-200 text-slate-600"
-              }`}
+        {/* Wardrobe summary */}
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-800">ワードローブ</div>
+            <a
+              href="/wardrobe"
+              className="text-xs font-semibold text-rose-600 hover:underline"
             >
-              {labelOf(cat)}
-            </button>
-          ))}
-        </div>
+              登録・削除はこちら →
+            </a>
+          </div>
 
-        {/* 色選択 */}
-        <div className="space-y-2">
-          <div className="text-sm font-semibold text-slate-800">色を選ぶ（追加時）</div>
-          <div className="grid grid-cols-4 gap-2">
-            {(Object.keys(COLOR_LABEL) as ColorTag[]).map((c) => (
-              <button
-                key={c}
-                onClick={() => setSelectedColor(c)}
-                className={`rounded-xl border p-2 flex items-center gap-2 transition ${
-                  selectedColor === c ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full ${COLOR_DOT[c]}`}></span>
-                <span className="text-xs text-slate-700">{COLOR_LABEL[c]}</span>
-              </button>
+          <div className="grid grid-cols-3 gap-2 text-xs text-slate-700">
+            {(Object.keys(counts) as Category[]).map((k) => (
+              <div key={k} className="bg-white border border-slate-200 rounded-xl px-3 py-2">
+                <div className="font-semibold">{labelOf(k)}</div>
+                <div className="text-slate-500">{counts[k]} 個</div>
+              </div>
             ))}
           </div>
-          <div className="text-xs text-slate-500">
-            服は変えずに、色×天気×小物で「失敗しにくい垢抜け」を作ります。
+
+          <div className="text-[11px] text-slate-500">
+            ※ ホームには一覧を出さないので、ボタンが下に流れません。
           </div>
         </div>
 
-        {/* Upload */}
-        <label className="block w-full bg-slate-900 text-white text-center py-3 rounded-xl cursor-pointer">
-          ＋ {labelOf(category)}を追加（最大{MAX_PER_CATEGORY}）
-          <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        </label>
+        {/* Sticky action area */}
+        <div className="space-y-3">
+          <button
+            onClick={generateCoordination}
+            className="
+              w-full
+              py-3
+              rounded-xl
+              font-semibold
+              text-white
+              tracking-wide
+              bg-[linear-gradient(to_bottom,#F4B6C2,#E78CA5,#C85C8E)]
+              shadow-[0_6px_18px_rgba(200,92,142,0.25)]
+              active:scale-[0.98]
+              transition-all
+              duration-200
+            "
+          >
+            コーデ生成（AI）
+          </button>
 
-        {/* Images */}
-        <div className="grid grid-cols-2 gap-3">
-          {clothes[category].map((item, index) => (
-            <div key={item.id} className="relative">
-              <img src={item.image} className="w-full h-40 object-cover rounded-xl" />
-              <div className="absolute left-2 bottom-2 text-[11px] px-2 py-1 rounded-full bg-white/90 border border-slate-200 text-slate-700">
-                {COLOR_LABEL[item.color]}
-              </div>
-              <button
-                onClick={() => handleDelete(category, index)}
-                className="absolute top-2 right-2 bg-black/70 text-white text-xs rounded-full w-6 h-6"
-                aria-label="delete"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-
-          {clothes[category].length === 0 && (
-            <div className="col-span-2 text-center text-sm text-slate-500 py-8 border border-dashed rounded-xl">
-              まだ {labelOf(category)} がありません
-            </div>
-          )}
+          <button
+            onClick={handleClearCoord}
+            className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
+          >
+            コーデをクリア
+          </button>
         </div>
-
-        {/* Buttons */}
-        <button
-          onClick={generateCoordination}
-          className="
-            w-full
-            py-3
-            rounded-xl
-            font-semibold
-            text-white
-            tracking-wide
-            bg-[linear-gradient(to_bottom,#F4B6C2,#E78CA5,#C85C8E)]
-            shadow-[0_6px_18px_rgba(200,92,142,0.25)]
-            active:scale-[0.98]
-            transition-all
-            duration-200
-          "
-        >
-          コーデ生成（AI）
-        </button>
-
-        <button
-          onClick={handleReset}
-          className="w-full border border-slate-300 text-slate-600 py-3 rounded-xl hover:bg-slate-100 transition"
-        >
-          コーデをクリア
-        </button>
 
         {/* Result */}
         {coordination.tops &&
@@ -891,7 +770,15 @@ export default function Home() {
               </button>
             </div>
           )}
+
+        {!canGenerate && (
+          <div className="text-xs text-slate-500">
+            まだ足りないカテゴリがあります。ワードローブで登録してね。
+          </div>
+        )}
       </div>
+
+      <BottomTab />
     </main>
   );
 }
